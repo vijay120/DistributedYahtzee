@@ -32,14 +32,14 @@ main(Params) ->
   % effectively-unique node name
   case net_kernel:start([list_to_atom(NodeName), shortnames]) of
     {ok, _Pid} ->
-      println("kernel started successfully with the shortnames " ++ NodeName);
+      printnameln("kernel started successfully with the shortnames " ++ NodeName);
     {error, TheReason} ->
-      println("fail to start kernel! intended shortnames: " ++ NodeName),
-      println("Reason: ~p", TheReason)
+      printnameln("Fail to start kernel! intended shortnames: " ++ NodeName),
+      printnameln("Reason: ~p", [TheReason])
   end,
   register(distributed_yahtzee, self()),
-  println("~s > Registered with the process name = ~s, nodename = ~p",
-    [node(), "distributed_yahtzee", node()]),
+  printnameln("Registered with the process name = ~s, nodename = ~p",
+    ["distributed_yahtzee", node()]),
   process_start().
 
 
@@ -48,13 +48,13 @@ main(Params) ->
 %% ====================================================================
 
 process_start() ->
-  println("~s > Spawning the first referee process with...", [node()]),
-  listen().
+  printnameln("Spawning the first referee process..."),
   % spawn's arguments: Module, Function, Args
-  % referee's arguments: ???? TODO ????
-  % Pid = spawn(referee, referee_main, []),
-  % println("~s > Referee process ~p spawned! Its PID is ~p", [node(), Id, Pid]).
+  Pid = spawn(referee, referee_main, [["head_ref"]]),
+  printnameln("Referee process spawned! Its PID is ~p", [Pid]),
+  listen().
 
+% TODO: Add data structure here.
 listen() ->
     receive
         %% =============================================================
@@ -72,18 +72,58 @@ listen() ->
         %       with an invalid games-per-match value (such as an even
         %       number, or a negative number) is ignored.
         {request_tournament, Pid, {NumPlayers, GamePerMatch}} ->
-            println("~s > request_tournament message received from ~p with " ++
+            printnameln("request_tournament message received from ~p with " ++
                 "num-players = ~p, games-per-match = ~p.",
-                [node(), Pid, NumPlayers, GamePerMatch]),
+                [Pid, NumPlayers, GamePerMatch]),
             Tid = ?TEMP,
             Players = [?TEMP, ?TEMP],
             OptionalData = [],
-            Pid ! {tournament_started, Pid, {Tid, Players, OptionalData}};
+            % The following message types can be sent from the rest of the system to
+            % a player:
+            %
+            %    > start_tournament - data is a single tid, a tournament identifier
+            % used (optionally) by the player to keep track of tournaments in which
+            % it is participating; this message must be sent to a player for a
+            % tournament x, and a positive response must be received from the
+            % player, before any subsequent gameplay messages for tournament x are
+            % sent to that player
+            SamplePlayerPid = self(), % <----- ?TEMP,
+            SamplePlayerPid ! {start_tournament, self(), {Tid}},
+            % wait until all players accept tournament......
+            % TODO: pass in Pid of the tournament requester
+            % TEMP: Send tournament_started before the loop. It should actually come after loop.
+            Pid ! {tournament_started, Pid, {Tid, Players, OptionalData}},
+            listen(),
+            %
+            % TODO: These lines won't actually happen. They need
+            % to happen when all the players accept the request.
+            %   +++++++++++ play_request DELEGATED TO REFEREE +++++++++++
+            %   >  play_request - data is a tuple { ref, tid, gid, roll-number, dice,
+            % scorecard, opponent-scorecard }.
+            %       >> ref is a unique ref identifying this play request;
+            %       >> tid is the tournament identifier of a tournament in
+            %          which the player is currently playing; gid is a game identifier for
+            %          the game in which the player is being asked to play;
+            %       >> roll-number is the roll number on the current turn (1, 2, 3)
+            %          the player is playing;
+            %       >> dice is a list of 5 die values (1-6) that represent the dice as they
+            %          appear on the current turn; scorecard is the player's scorecard as of
+            %          the completion of the previous round of the current game; and
+            %       >> opponent-scorecard is the opponent's scorecard as of the completion of
+            %          the previous round of the current game. The scorecard and opponent-
+            %          scorecard values are here with the assumption that we want to send
+            %          this information around;
+            %
+            %   > end_tournament - data is a single tid that the player has
+            % previously received in a start_tournament message; this message is
+            % sent to a player for a tournament x when that player has no more games
+            % to play in tournament x, and does not convey a result.
+            SamplePlayerPid ! {end_tournament, self(), {Tid}};
             
         % tournament-info - data is a tournament ID 
         {tournament_info, Pid, {TournamentId}} ->
-            println("~s > tournament_info message received from ~p with " ++
-                "tournament ID = ~p.", [node(), Pid, TournamentId]),
+            printnameln("tournament_info message received from ~p with " ++
+                "tournament ID = ~p.", [Pid, TournamentId]),
             Status = ?TEMP,
             Winner = ?TEMP,
             OptionalData = [],
@@ -92,8 +132,8 @@ listen() ->
 
         % user-info - data is a username
         {user_info, Pid, {Username}} ->
-            println("~s > user_info message received from ~p with " ++
-                "username = ~p.", [node(), Pid, Username]),
+            printnameln("user_info message received from ~p with " ++
+                "username = ~p.", [Pid, Username]),
             MatchWins = [?TEMP, ?TEMP],
             MatchLosses = [?TEMP, ?TEMP],
             TournamentsPlayed = [?TEMP, ?TEMP],
@@ -118,9 +158,19 @@ listen() ->
         %         There is no mechanism for changing passwords.
 
         {login, Pid, {Username, Password}} ->
-            println("~s > login message received from ~p with " ++
+            % The following message types can be sent from the rest of the system to
+            % a player:
+            %
+            %    > logged_in - data is a login-ticket, a ref that the player can use
+            % to later log out in an orderly fashion. This message is sent by the
+            % system to a player when the player logs in.
+            printnameln("login message received from ~p with " ++
                 "username = ~p, password = ~p.",
-                [node(), Pid, Username, Password]);
+                [Pid, Username, Password]),
+            LoginTicket = make_ref(),
+            Pid ! {logged_in, self(), {LoginTicket}},
+            printnameln("logged_in message sent to ~p with " ++
+                "login-ticket = ~p.", [Pid, LoginTicket]);
 
         % logout - data is a
         %    { login-ticket };
@@ -131,8 +181,9 @@ listen() ->
         %       playing in tournaments until they log in again).
 
         {logout, Pid, {LoginTicket}} ->
-            println("~s > logout message received from ~p with " ++
-                "login-ticket = ~p.", [node(), Pid, LoginTicket]);
+            % TODO: Change status of the player to logout if login ticket is good.
+            printnameln("logout message received from ~p with " ++
+                "login-ticket = ~p.", [Pid, LoginTicket]);
 
         % accept_tournament - data is a tuple
         %     { tid, login-ticket };
@@ -148,8 +199,8 @@ listen() ->
         %         play-request messages for this player in the specified
         %         tournament are sent.
         {accept_tournament, Pid, {Tid, LoginTicket}} ->
-            println("~s > accept_tournament message received from ~p with " ++
-                "tid = ~p, login-ticket = ~p.", [node(), Pid, Tid, LoginTicket]);
+            printnameln("accept_tournament message received from ~p with " ++
+                "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]);
 
         % reject_tournament - data is a tuple
         %     { tid, login-ticket };
@@ -166,8 +217,8 @@ listen() ->
         %         the tournament; thus, tournament managers must use timeouts
         %         when setting up tournaments.
         {reject_tournament, Pid, {Tid, LoginTicket}} ->
-            println("~s > reject_tournament message received from ~p with " ++
-                "tid = ~p, login-ticket = ~p.", [node(), Pid, Tid, LoginTicket]);
+            printnameln("reject_tournament message received from ~p with " ++
+                "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]);
 
         % play_action - data is a tuple
         %     { ref, tid, gid, roll-number, dice-to-keep, scorecard-line }.
@@ -183,26 +234,27 @@ listen() ->
         %     > scorecard-line is an integer representing a line on the
         %        scorecard in which to score the dice.
         %
-        %     > 1-13 represent lines on the scorecard in the order presented
+        %        1-13 represent lines on the scorecard in the order presented
         %        in the homework assignment, while 0 represents no scoring for
         %        this action. Sending a non-zero value for scorecard-line ends
         %        the round for the player and scores that line in the scorecard;
         %        it is a violation of the protocol for the player to send 0 for
         %        scorecard-line on roll-number 3.
         {play_action, Pid, {Ref, Tid, Gid, RollNumber, DiceToKeep, ScorecardLine}} ->
-            println("~s > play_action message received from ~p with " ++
+            printnameln("play_action message received from ~p with " ++
                 "ref = ~p, tid = ~p, gid = ~p",
-                [node(), Pid, Tid, Gid]),
-            println("~s > roll-number = ~p, dice-to-keep = ~p, scorecard-line = ~p",
-                [node(), RollNumber, DiceToKeep, ScorecardLine]);
+                [Pid, Tid, Gid]),
+            printnameln("roll-number = ~p, dice-to-keep = ~p, scorecard-line = ~p",
+                [RollNumber, DiceToKeep, ScorecardLine]);
+            % TODO: Forward to referee.
 
 
         %% ==============================================================
         %%                             Else
         %% ==============================================================
         {MessageType, Pid, Data} ->
-            println("~s > Malformed ~p message from ~p with data = ~p",
-                [node(), MessageType, Pid, Data]),
+            printnameln("Malformed ~p message from ~p with data = ~p",
+                [MessageType, Pid, Data]),
             Pid ! {error, "Malformed message."}
     end,
     listen().
@@ -211,6 +263,13 @@ listen() ->
 %% ====================================================================
 %%                       Pretty Print Functions
 %% ====================================================================
+printnameln(ToPrint) ->
+  println(io_lib:format("~s > ", [node()]) ++ ToPrint).
+
+printnameln(ToPrint, Options) ->
+  println(io_lib:format("~s > ", [node()]) ++ ToPrint, Options).
+
+
 % Helper functions for timestamp handling.
 get_two_digit_list(Number) ->
   if Number < 10 ->

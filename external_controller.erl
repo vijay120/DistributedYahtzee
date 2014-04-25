@@ -41,8 +41,7 @@ loop_once() ->
     %        data about the tournament (such as a representation of the bracket).
     %        (Sent in response to a start-tournament.)
     {tournament_started, Pid, {Tid, Players, OptionalData}} ->
-      println("~s: > The list of players is ~p",
-        [?GlobalName, Players]);
+      printnameln("The list of players is ~p", [Players]);
 
     % tournament-status - data is a tuple
     %     { tid, status, winner, optional-data } where
@@ -57,8 +56,8 @@ loop_once() ->
     % (Sent in response to a tournament-info.)
     % A tournament-info requesting information about an invalid tournament ID is ignored.
     {tournament_status, Pid, {Tid, Status, Winner, OptionalData}} ->
-      println("~s: > The tournament status is ~p. The winner is ~p",
-        [?GlobalName, Status, Winner]);
+      printnameln("The tournament status is ~p. The winner is ~p",
+        [Status, Winner]);
 
     % user-status - data is a tuple
     %   { username, match-wins, match-losses, tournaments-played, tournament-wins } where
@@ -73,19 +72,15 @@ loop_once() ->
     %     information about an invalid username is ignored.
     {user_status, Pid, {Username, MatchWins, MatchLosses,
       TournamentsPlayed, TournamentWins}} ->
-      println("~s: > The match wins is ~p",
-        [?GlobalName, MatchWins]),
-      println("~s: > The match losses is ~p",
-        [?GlobalName, MatchLosses]),
-      println("~s: > The tournaments played are ~p",
-        [?GlobalName, TournamentsPlayed]),
-      println("~s: > The tournaments wins is ~p",
-        [?GlobalName, TournamentWins]);
+      printnameln("The match wins is ~p", [MatchWins]),
+      printnameln("The match losses is ~p", [MatchLosses]),
+      printnameln("The tournaments played are ~p", [TournamentsPlayed]),
+      printnameln("The tournaments wins is ~p", [TournamentWins]);
 
     {error, Error} ->
-      println("~s > Error: ~p", [?GlobalName, Error]);
+      printnameln("Error: ~p", [Error]);
     _ ->
-      println("~s > Error: Bad response!", [?GlobalName])
+      printnameln("Error: Bad response!")
   end,
   halt().
 
@@ -96,15 +91,15 @@ main(Params) ->
   TheRest = tl(tl(Params)),
   net_kernel:start([external_controller, shortnames]),
 
-  % ======== START boilerplate code to connect for global registry =========
+  % ======== START boilerplate code to connect to global registry =========
   % case net_kernel:connect(list_to_atom(SystemManagerNode)) of
   %   true ->
-  %     println("Connected to ~p successfully.", [SystemManagerNode]);
+  %     printnameln("Connected to ~p successfully.", [SystemManagerNode]);
   %   false ->
-  %     println("Error: Cannot connect to ~p! Please try again", [SystemManagerNode]),
+  %     printnameln("Error: Cannot connect to ~p! Please try again", [SystemManagerNode]),
   %     halt()
   % end,
-  % ======== END boilerplate code to connect for global registry =========
+  % ======== END boilerplate code to connect to global registry =========
 
   % The following message types can be sent from the outside world to
   % the rest of the system:
@@ -130,39 +125,41 @@ main(Params) ->
           GamePerMatchString = hd(tl(TheRest)),
           NumPlayers = list_to_integer(NumPlayersString),
           GamePerMatch = list_to_integer(GamePerMatchString),
-          println("~s > Sending a tournament_request message with " ++
-            "data = {~p, ~p}...",
-            [?GlobalName, NumPlayers, GamePerMatch]),
+          printnameln("Sending a tournament_request message with " ++
+            "data = {~p, ~p}...", [NumPlayers, GamePerMatch]),
           {distributed_yahtzee, SystemManagerNode} !
             {request_tournament, self(), {NumPlayers, GamePerMatch}};
         _ ->
           halt("Error: There should be exactly two parameters after " ++
             "the keyword 'request_tournament'")
       end;
+
     "tournament_info" ->
       case length(TheRest) of
         1 ->
           TournamentId = hd(TheRest),
-           println("~s > Sending a tournament_info message with " ++
-            "data = {~p}...", [?GlobalName, TournamentId]),
+           printnameln("Sending a tournament_info message with " ++
+            "data = {~p}...", [TournamentId]),
           {distributed_yahtzee, SystemManagerNode} !
             {tournament_info, self(), {TournamentId}};
         _ ->
           halt("Error: There should be exactly one parameter after " ++
             "the keyword 'tournament_info'")
       end;
+
     "user_info" ->
       case length(TheRest) of
         1 ->
           Username = hd(TheRest),
-          println("~s > Sending a tournament_request message with " ++
-            "data = {~p}...", [?GlobalName, Username]),
+          printnameln("Sending a tournament_request message with " ++
+            "data = {~p}...", [Username]),
           {distributed_yahtzee, SystemManagerNode} !
             {user_info, self(), {Username}};
         _ ->
           halt("Error: There should be exactly one parameter after " ++
             "the keyword 'user_info'")
       end;
+
     _ ->
       halt("Error: Not a valid request.")
   end,
@@ -173,3 +170,8 @@ main(Params) ->
 %% ====================================================================
 %%                       Helper Functions
 %% ====================================================================
+printnameln(ToPrint) ->
+  println(io_lib:format("~s > ", [?GlobalName]) ++ ToPrint).
+
+printnameln(ToPrint, Options) ->
+  println(io_lib:format("~s > ", [?GlobalName]) ++ ToPrint, Options).
