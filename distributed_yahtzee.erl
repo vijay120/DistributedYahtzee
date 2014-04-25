@@ -26,15 +26,13 @@ main(Params) ->
   % The only parameter is the name of the node to register. This
   % should be a lowercase ASCII string with no periods or @ signs.
   NodeName = hd(Params),
-  println("nodename = " ++ NodeName),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
   % format microseconds of timestamp to get an
   % effectively-unique node name
   case net_kernel:start([list_to_atom(NodeName), shortnames]) of
     {ok, _Pid} ->
-      println("kernel started successfully with the shortnames " ++ NodeName),
-      println("node() = ~p", [node()]);
+      println("kernel started successfully with the shortnames " ++ NodeName);
     {error, TheReason} ->
       println("fail to start kernel! intended shortnames: " ++ NodeName),
       println("Reason: ~p", TheReason)
@@ -88,7 +86,7 @@ listen() ->
         %%                             Else
         %% ==============================================================
         {_, Pid, _Data} ->
-            Pid ! {error, Error}
+            Pid ! {error, "Unexpected message."}
     end,
     listen().
 
