@@ -22,9 +22,6 @@
 
 -import(distributed_yahtzee, [println/1, println/2]).
 
-% The following message types can be sent from the rest of the system
-% to the outside world:
-
 % loop() ->
 %   loop_once(),
 %   loop().
