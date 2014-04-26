@@ -4,11 +4,12 @@
 %% @author Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
 -module(external_controller).
 
-% this assumes that the system manager's process name is 'distributed_yahtzee'
 %% Example:
 
-% {ash:1} erl -noshell -run external_controller main $node_name $action
+% {ash:1} erl -noshell -run external_controller main $node_name $full_node_name $action
 
+% e.g. (node_name=node, full_node_name=node@host)
+%
 % action = 
 %   request_tournament NumPlayers GamePerMatch
 %   tournament_info TournamentId
@@ -20,7 +21,7 @@
 %% ====================================================================
 -export([main/1]).
 
--import(distributed_yahtzee, [println/1, println/2]).
+-import(yahtzee_manager, [println/1, println/2]).
 
 % loop() ->
 %   loop_once(),
@@ -83,9 +84,10 @@ loop_once() ->
 
 
 main(Params) ->
-  SystemManagerNode = list_to_atom(hd(Params)),
-  Action = hd(tl(Params)),
-  TheRest = tl(tl(Params)),
+  NodeName = list_to_atom(hd(Params)),
+  SystemManagerNode = list_to_atom(hd(tl(Params))),
+  Action = hd(tl(tl(Params))),
+  TheRest = tl(tl(tl(Params))),
   net_kernel:start([external_controller, shortnames]),
 
   % ======== START boilerplate code to connect to global registry =========
@@ -124,7 +126,7 @@ main(Params) ->
           GamePerMatch = list_to_integer(GamePerMatchString),
           printnameln("Sending a tournament_request message with " ++
             "data = {~p, ~p}...", [NumPlayers, GamePerMatch]),
-          {distributed_yahtzee, SystemManagerNode} !
+          {NodeName, SystemManagerNode} !
             {request_tournament, self(), {NumPlayers, GamePerMatch}};
         _ ->
           halt("Error: There should be exactly two parameters after " ++
@@ -137,7 +139,7 @@ main(Params) ->
           TournamentId = hd(TheRest),
            printnameln("Sending a tournament_info message with " ++
             "data = {~p}...", [TournamentId]),
-          {distributed_yahtzee, SystemManagerNode} !
+          {NodeName, SystemManagerNode} !
             {tournament_info, self(), {TournamentId}};
         _ ->
           halt("Error: There should be exactly one parameter after " ++
@@ -150,7 +152,7 @@ main(Params) ->
           Username = hd(TheRest),
           printnameln("Sending a tournament_request message with " ++
             "data = {~p}...", [Username]),
-          {distributed_yahtzee, SystemManagerNode} !
+          {NodeName, SystemManagerNode} !
             {user_info, self(), {Username}};
         _ ->
           halt("Error: There should be exactly one parameter after " ++

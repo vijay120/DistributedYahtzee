@@ -25,21 +25,21 @@
 main(Params) ->
   % The only parameter is the name of the node to register. This
   % should be a lowercase ASCII string with no periods or @ signs.
-  NodeName = hd(Params),
+  NodeName = list_to_atom(hd(Params)),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
   % format microseconds of timestamp to get an
   % effectively-unique node name
-  case net_kernel:start([list_to_atom(NodeName), shortnames]) of
+  case net_kernel:start([NodeName, shortnames]) of
     {ok, _Pid} ->
-      printnameln("kernel started successfully with the shortnames " ++ NodeName);
+      printnameln("kernel started successfully with the shortnames ~p", [NodeName]);
     {error, TheReason} ->
-      printnameln("Fail to start kernel! intended shortnames: " ++ NodeName),
+      printnameln("Fail to start kernel! intended shortnames: ~p,", [NodeName]),
       printnameln("Reason: ~p", [TheReason])
   end,
-  register(yahtzee_manager, self()),
-  printnameln("Registered with the process name = ~s, nodename = ~p",
-    ["yahtzee_manager", node()]),
+  register(NodeName, self()),
+  printnameln("Registered with the process name = ~p, nodename = ~p",
+    [NodeName, node()]),
   process_start().
 
 
@@ -50,8 +50,8 @@ main(Params) ->
 process_start() ->
   printnameln("Spawning the first referee process..."),
   % spawn's arguments: Module, Function, Args
-  Pid = spawn(referee, referee_main, [["head_ref"]]),
-  printnameln("Referee process spawned! Its PID is ~p", [Pid]),
+  % Pid = spawn(referee, referee_main, [["the_head_ref"]]),
+  % printnameln("Referee process spawned! Its PID is ~p", [Pid]),
   listen().
 
 % TODO: Add data structure here.
