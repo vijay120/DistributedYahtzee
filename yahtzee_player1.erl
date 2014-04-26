@@ -55,14 +55,13 @@ handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
 	end,
 
 	receive
-		{logged_in, Pid, Username, NewLoginTicket} ->
+		{logged_in, Pid, Username, {NewLoginTicket}} ->
 			io:format("Received a logged_in message~n"),
 			handleMessages(Username, NewLoginTicket, ActiveTids, IsLoggingOut, SysManagers);
-		{start_tournament, Pid, Username, Tid} ->
+		{start_tournament, Pid, Username, {Tid}} ->
 			io:format("Received a start_tournament message~n"),
 			if
 				IsLoggingOut ->
-					{_, Tid} = lists:keysearch(Pid, 1, ActiveTids),
 					NewActiveTids = ActiveTids,
 					Pid ! {reject_tournament, self(), Username, {Tid, LoginTicket}};
 				true ->
@@ -70,7 +69,7 @@ handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
 					Pid ! {accept_tournament, self(), Username, {Tid, LoginTicket}}
 			end,
 			handleMessages(Username, LoginTicket, NewActiveTids, IsLoggingOut, SysManagers);
-		{end_tournament, Pid, Username, Tid} ->
+		{end_tournament, Pid, Username, {Tid}} ->
 			io:format("Received an end_tournament message~n"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
 			handleMessages(Username, LoginTicket, NewActiveTids, IsLoggingOut, SysManagers);
