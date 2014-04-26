@@ -2,11 +2,11 @@
 %% Harvey Mudd College
 %% Distributed Yahtzee
 %% @author Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
--module(distributed_yahtzee).
+-module(yahtzee_manager).
 
 %% Example:
 
-% {ash:1} erl -noshell -run distributed_yahtzee main system_manager_name
+% {ash:1} erl -noshell -run yahtzee_manager main system_manager_name
 
 -import(refereee, [referee_main/1]).
 -import(player, [player_main/1]).
@@ -37,9 +37,9 @@ main(Params) ->
       printnameln("Fail to start kernel! intended shortnames: " ++ NodeName),
       printnameln("Reason: ~p", [TheReason])
   end,
-  register(distributed_yahtzee, self()),
+  register(yahtzee_manager, self()),
   printnameln("Registered with the process name = ~s, nodename = ~p",
-    ["distributed_yahtzee", node()]),
+    ["yahtzee_manager", node()]),
   process_start().
 
 
@@ -157,7 +157,7 @@ listen() ->
         %         when the first login is received for that username.
         %         There is no mechanism for changing passwords.
 
-        {login, Pid, {Username, Password}} ->
+        {login, Pid, _Username, {Username, Password}} ->
             % The following message types can be sent from the rest of the system to
             % a player:
             %
