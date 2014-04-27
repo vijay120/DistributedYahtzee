@@ -16,16 +16,14 @@
 -define(YAHTZEE, 12).
 -define(CHANCE, 13).
 
-% Two main things: set up connection and register with tournament managers,
-% handle game playing.
-
 main(Params) ->
 	%set up network connections
 	_ = os:cmd("epmd -daemon"),
 	Reg_name = hd(Params),
 	Username = hd(tl(Params)),
 	Password = hd(tl(tl(Params))),
-	SysManagers = tl(tl(tl(Params))), % will be a list of them
+	NodeName = hd(tl(tl(tl(Params)))),
+	SysManagers = tl(tl(tl(tl(Params)))), % will be a list of them
 
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
 	register(player, self()), % TODO: name might change
@@ -33,9 +31,10 @@ main(Params) ->
 	% register with all system managers. According to assignment the names are their
 	% globally registered ones.
 	io:format("Just before global send, SysManagers are: ~p~n", [SysManagers]),
-	lists:map(fun(X) -> net_kernel:connect_node(list_to_atom(X)) end, SysManagers),
-	global:sync(),
-	lists:map(fun(X) -> X ! {login, self(), Username, {Username, Password}} end, SysManagers),
+	lists:map(fun(X) -> net_kernel:connect_node(X) end, SysManagers),
+	lists:map(fun(X) -> {NodeName, X} ! {login, self(), Username, {Username, Password}} end, SysManagers),
+
+	io:format("My PID is: ~p", [self()]),
 
 	handleMessages(Username, [], [], false, SysManagers).
 
@@ -106,11 +105,11 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard
 					ChangesToMake = lists:nth(Index, AllDiceChanges),
 					io:format("MaxExpectedScore is: ~p", [MaxExpectedScore]),
 					io:format("KeepScore is: ~p", [KeepScore]),
-					io:format("Changes in die to make are: ~p", [ChangesToMake]); % KeepMove doesn't actually matter here
-					% Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, ChangesToMake, KeepMove}};
+					io:format("Changes in die to make are: ~p", [ChangesToMake]), % KeepMove doesn't actually matter here
+					Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, ChangesToMake, KeepMove}};
 				true ->
-					io:format("Best move is: ~p", [KeepMove]) 
-					% Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
+					io:format("Best move is: ~p", [KeepMove]), 
+					Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
 			end
 			% [OneChangeScore, OneChangeMove, DiceToChange] = oneChangeMove(Dice, Scorecard),
 	end.
