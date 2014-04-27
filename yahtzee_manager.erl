@@ -168,7 +168,7 @@ listen() ->
                 "username = ~p, password = ~p.",
                 [Pid, Username, Password]),
             LoginTicket = make_ref(),
-            Pid ! {logged_in, self(), {LoginTicket}},
+            Pid ! {logged_in, self(), Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]);
 
