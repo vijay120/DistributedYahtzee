@@ -291,14 +291,14 @@ calcFullHouse(Dice, Score) ->
 	if
 		Score /= -1 ->
 			-1;
-		true -> % take first two die; filter original five rolls from these.
-				% if the length of any of these are four or greater, we've
-				% met the condition.
+		true -> % Filter first by one die, then a second. 
+				% If the length of the first filter leaves 2 or 3 die
+				% and the second gets the rest, we have a full house.
 			FirstDieUnmatch = lists:filter(fun(X) -> X /= lists:nth(1, Dice) end, Dice),
 			SecondDieUnMatch = lists:filter(fun(X) -> X /= lists:nth(1, FirstDieUnmatch) end, FirstDieUnmatch),
 			LengthFirst = length(FirstDieUnmatch),
 	
-			case ((LengthFirst == 2) or (LengthFirst == 3)) and (SecondDieUnMatch == []) of  % only have aaabb if first removed 2 or 3 that matched it and second got rest
+			case ((LengthFirst == 2) or (LengthFirst == 3)) and (SecondDieUnMatch == []) of
 				true ->
 					25;
 				false ->
@@ -352,7 +352,7 @@ calcYahtzee(Dice, Score) ->
 		true -> % filter out those that match first die, see if none left
 			FirstDieUnmatch = lists:filter(fun(X) -> X /= lists:nth(1, Dice) end, Dice),
 	
-			case FirstDieUnmatch == [] of  % only have aaabb if first removed 2 or 3 that matched it and second got rest
+			case FirstDieUnmatch == [] of
 				true ->
 					50;
 				false ->
