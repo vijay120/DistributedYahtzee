@@ -1,5 +1,5 @@
 -module(yahtzee_player1).
--export([main/1, bestMove/2]).
+-export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, getExpectedScore/3, playMove/9]).
 -define(TIMEOUT, 2000).
 
 -define(ACES, 1).
@@ -35,7 +35,7 @@ main(Params) ->
 	io:format("Just before global send, SysManagers are: ~p~n", [SysManagers]),
 	lists:map(fun(X) -> net_kernel:connect_node(list_to_atom(X)) end, SysManagers),
 	global:sync(),
-	lists:map(fun(X) -> global:send(X, {login, self(), Username, {Username, Password}}) end, SysManagers),
+	lists:map(fun(X) -> X ! {login, self(), Username, {Username, Password}} end, SysManagers),
 
 	handleMessages(Username, [], [], false, SysManagers).
 
@@ -85,8 +85,6 @@ handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
 % handles all the logic for calculating the best move (according to expected
 % value), and sends that message back to the ref.
 playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard) ->
-	% make function that takes score card and dice, returns max value for that.
-	% get this for our current score.
 	if
 		RollNumber == 3 -> % if on last roll, just give the best move we can do.
 			[_, Move] = bestMove(Dice, Scorecard),
@@ -95,20 +93,97 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard
 		true -> % get expected value of keeping each permutation of die
 			[KeepScore, KeepMove] = bestMove(Dice, Scorecard),
 			KeepAllDice = [true, true, true, true, true],
-			Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
+			% io:format("KeepScore: ~p, KeepMove: ~p", [KeepScore, KeepMove]),
+			AllDiceChanges = fixFlatten(lists:flatten(generateDiceChanges(5, [])), []), % gets 2^5 lists of all dice keep/change
+			% io:format("AllDiceChanges: ~p", [AllDiceChanges]),
+			% gets the expected score for all possible dice change configurations
+			ExpectedScores = lists:map(fun(X) -> getExpectedScore(X, Dice, Scorecard) end, AllDiceChanges),
+			% io:format("ChangesScores are: ~p", [ExpectedScores]),
+			MaxExpectedScore = lists:max(ExpectedScores),
+			if
+				MaxExpectedScore > KeepScore -> % then we use that change
+					Index = indexOf(MaxExpectedScore, ExpectedScores),
+					ChangesToMake = lists:nth(Index, AllDiceChanges),
+					io:format("MaxExpectedScore is: ~p", [MaxExpectedScore]),
+					io:format("KeepScore is: ~p", [KeepScore]),
+					io:format("Changes in die to make are: ~p", [ChangesToMake]); % KeepMove doesn't actually matter here
+					% Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, ChangesToMake, KeepMove}};
+				true ->
+					io:format("Best move is: ~p", [KeepMove]) 
+					% Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
+			end
 			% [OneChangeScore, OneChangeMove, DiceToChange] = oneChangeMove(Dice, Scorecard),
-	end,
+	end.
 
-	% then get the maximum expected value from changing any one, two, three, four or
-	% five die. If the max of these is higher than our current score, request
-	% those rolls back. 
-	% unless the rollNumber is the third, in which case just give back our best move.
-	true.
+% given a particular set of changes, dice and scorecard, calculates the expected value of those changes,
+% which is the average of all possible configurations that can result from this.
+getExpectedScore(DiceChanges, Dice, Scorecard) ->
+	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice changes
+	% io:format("PossibleDieRolls are: ~p~n", [PossibleDieRolls]),
+	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls), % get all the best moves
+	% io:format("got here"),
+	% io:format("ListDieScores is: ~p~n", [ListDieScores]),
+	Sum = lists:sum(ListDieScores),
+	% io:format("Sum is: ~p~n", [Sum]),
+	Length = length(ListDieScores),
+	% io:format("Length is: ~p~n", [Length]),
+	Sum / length(ListDieScores).
+	% lists:sum(ListDieScores) / length(ListDieScores).
 
-% generate a separate list of each possible combination for each possible dice combo
-% to keep, then average each to get all expected values. See if the max
-% is greater than or less than our current best move?
+% Gets a list of lists, each sub-list consisting of five elements.
+% Fixes our mangling below.
+fixFlatten(List, NewList) ->
+	if
+		List == [] ->
+			NewList;
+		true ->
+			fixFlatten(lists:sublist(List, 6, length(List)), [lists:sublist(List, 5)| NewList])
+	end.
 
+% Generates all combinations of booleans, as a really mangled list of lists.
+% Can be flattened and then take five at a time to create a proper list of lists.
+generateDiceChanges(NumLeft, AccumList) ->
+	if
+		NumLeft == 0 ->
+			AccumList;
+		true ->
+			[generateDiceChanges(NumLeft-1, [true | AccumList]), generateDiceChanges(NumLeft-1, [false | AccumList])]
+	end.
+
+% Given a set of changes to make and the current state of the dice,
+% return a mangled list of lists of all possible dice rolls for those
+% changes.
+generateDiceRolls(DiceChanges, Dice, AccumList) ->
+	if
+		DiceChanges == [] ->
+			lists:reverse(AccumList);
+		true ->
+			if
+				hd(DiceChanges) == true -> % Just keep this die
+					[generateDiceRolls(tl(DiceChanges), tl(Dice), [hd(Dice) | AccumList])];
+				true -> % case of changing it, generate all other dice rolls then our current die.
+					[generateDiceRolls(tl(DiceChanges), tl(Dice), [transformVal(hd(Dice) + 1) | AccumList]), 
+					 generateDiceRolls(tl(DiceChanges), tl(Dice), [transformVal(hd(Dice) + 2) | AccumList]),
+					 generateDiceRolls(tl(DiceChanges), tl(Dice), [transformVal(hd(Dice) + 3) | AccumList]), 
+					 generateDiceRolls(tl(DiceChanges), tl(Dice), [transformVal(hd(Dice) + 4) | AccumList]),
+					 generateDiceRolls(tl(DiceChanges), tl(Dice), [transformVal(hd(Dice) + 5) | AccumList])]
+			end		
+	end.
+
+% Makes it so that we never end up with our original value. 
+% We add 1,2,3,4, and 5 as above; if we end up past 6,
+% we change it to that num - 6. Can't just do a mod
+% because we never want 0.
+transformVal(Num) ->
+	if
+		Num < 7 ->
+			Num;
+		true ->
+			Num - 6
+	end.
+
+% Given a particular set of dice and the current scorecard, return the best score
+% and the move on the scorecard that gives it.
 bestMove(Dice, Scorecard) ->
 	AcesScore = calcUpper(Dice, lists:nth(?ACES, Scorecard), 1),
 	TwosScore = calcUpper(Dice, lists:nth(?TWOS, Scorecard), 2),
@@ -142,9 +217,11 @@ bestMove(Dice, Scorecard) ->
 			AdjustedMaxMove = MaxMove
 	end,
 
-	io:format("MaxScore is: ~p, MaxMove is: ~p~n", [MaxScore, AdjustedMaxMove]),
+	% io:format("MaxScore is: ~p, MaxMove is: ~p~n", [MaxScore, AdjustedMaxMove]),
 	[MaxScore, AdjustedMaxMove].
 
+% Given the dice and scorecard and number on the upper board (i.e. ones, twos...sixes)
+% Calculate the score for that particular move.
 calcUpper(Dice, Score, Num) ->
 	if
 		Score /= -1 ->
@@ -154,6 +231,8 @@ calcUpper(Dice, Score, Num) ->
 	end,
 	NewScore.
 
+% Given dice and scorecard, calculate the score for a three of a kind.
+% (A three of a kind is also a valid four of a kind or Yahtzee.)
 calcThreeKind(Dice, Score) ->
 	if
 		Score /= -1 ->
@@ -174,6 +253,8 @@ calcThreeKind(Dice, Score) ->
 			end
 	end.
 
+% Given dice and scorecard, calculate score for a four of a kind.
+% (A four of a kind is also a valid Yahtzee.)
 calcFourKind(Dice, Score) ->
 	if
 		Score /= -1 ->
@@ -193,6 +274,8 @@ calcFourKind(Dice, Score) ->
 			end
 	end.
 
+% Given dice and scorecard, calculate score for a full house.
+% A full house is a three of a kind and a two of a kind.
 calcFullHouse(Dice, Score) ->
 	if
 		Score /= -1 ->
@@ -212,6 +295,8 @@ calcFullHouse(Dice, Score) ->
 			end
 	end.
 
+% Given dice and scorecard, calculate score for small straight.
+% Small straight: x,x+1,x+2,x+3,y (y can be anything)
 calcSmallStraight(Dice, Score) ->
 	DiceSet = ordsets:from_list(Dice),
 	if
@@ -229,6 +314,8 @@ calcSmallStraight(Dice, Score) ->
 			end
 	end.
 
+% Given dice and scorecard, calculate score for large straight.
+% Large straight: x,x+1,x+2,x+3,x+4
 calcLargeStraight(Dice, Score) ->
 	DiceSet = ordsets:from_list(Dice),
 	if
@@ -245,6 +332,8 @@ calcLargeStraight(Dice, Score) ->
 			end
 	end.
 
+% Given dice and scorecard, calculate score for Yahtzee. 
+% Yahtzee: five of a kind.
 calcYahtzee(Dice, Score) ->
 	if
 		Score /= -1 ->
@@ -260,6 +349,7 @@ calcYahtzee(Dice, Score) ->
 			end
 	end.
 
+% Calculate the total value of all dice. 
 calcChance(Dice, Score) ->
 	if
 		Score /= -1 ->
