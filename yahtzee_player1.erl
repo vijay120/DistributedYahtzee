@@ -22,33 +22,39 @@ main(Params) ->
 	Reg_name = hd(Params),
 	Username = hd(tl(Params)),
 	Password = hd(tl(tl(Params))),
-	NodeName = hd(tl(tl(tl(Params)))),
-	SysManagers = tl(tl(tl(tl(Params)))), % will be a list of them
+	SysManagers = tl(tl(tl(Params))), % will be a list of them
+
+	% TODO: as per ongoing Moodle discussion, sysmanagers register as yahtzee_manager
+	% 		so we don't specify it on the command line.
 
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
 	register(player, self()), % TODO: name might change
 
 	% register with all system managers. According to assignment the names are their
 	% globally registered ones.
-	io:format("Just before global send, SysManagers are: ~p~n", [SysManagers]),
+	io:format("Just before global send SysManagers: ~p~n", [SysManagers]),
 	lists:map(fun(X) -> net_kernel:connect_node(X) end, SysManagers),
-	lists:map(fun(X) -> {NodeName, X} ! {login, self(), Username, {Username, Password}} end, SysManagers),
+	lists:map(fun(X) -> {yahtzee_manager, X} ! {login, self(), Username, {Username, Password}} end, SysManagers),
 
 	io:format("My PID is: ~p", [self()]),
 
-	handleMessages(Username, [], [], false, SysManagers).
+	handleMessages(Username, [], [], false).
 
 % IsLoggingOut: A boolean if we want to log out, in which case we reject
 % any new tournaments and wait until all our active tourneys are done,
 % and then finally log out.
-handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
-	io:format("In handleMessages with username: ~p, LoginTickets: ~p, ActiveTids: ~p, SysManagers: ~p~n",
-			  						  [Username, LoginTicket, ActiveTids, SysManagers]),
+%
+% LoginTickets is now a tuple, {Pid, LoginTicket}, so we can associate it with the 
+% proper system manager. (As per Moodle protocol clarification.)
+handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
+	io:format("In handleMessages with username: ~p, LoginTicketss: ~p, ActiveTids: ~p~n",
+			  						  [Username, LoginTickets, ActiveTids]),
 		% Logs us out if we want to and are in no active tournaments.
 	if  % Currently this will never run as we never actually want to
 	    % programmatically log out.
 		IsLoggingOut and ActiveTids == [] ->
-			lists:map(fun(X) -> global:send(X, {logout, self(), Username, {LoginTicket}}) end, SysManagers);
+			lists:map(fun({Pid, LoginTicket}) -> Pid ! {logout, self(), Username, {LoginTicket}} end, LoginTickets);
+			% lists:map(fun(X) -> global:send(X, {logout, self(), Username, {LoginTickets}}) end, SysManagers);
 		true ->
 			true
 	end,
@@ -56,33 +62,41 @@ handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
 	receive
 		{logged_in, Pid, Username, {NewLoginTicket}} ->
 			io:format("Received a logged_in message~n"),
-			handleMessages(Username, NewLoginTicket, ActiveTids, IsLoggingOut, SysManagers);
+			handleMessages(Username, [{Pid, NewLoginTicket} | LoginTickets], ActiveTids, IsLoggingOut);
 		{start_tournament, Pid, Username, {Tid}} ->
 			io:format("Received a start_tournament message~n"),
+			{_, ProperLoginTicket} = lists:keyfind(Pid, 1, LoginTickets),
 			if
-				IsLoggingOut ->
-					NewActiveTids = ActiveTids,
-					Pid ! {reject_tournament, self(), Username, {Tid, LoginTicket}};
+				ProperLoginTicket == false ->
+					io:format("No PID matches this login ticket."),
+					NewActiveTids = ActiveTids;
 				true ->
-					NewActiveTids = [Tid|ActiveTids], 
-					Pid ! {accept_tournament, self(), Username, {Tid, LoginTicket}}
+					if
+						IsLoggingOut ->
+							NewActiveTids = ActiveTids,
+							Pid ! {reject_tournament, self(), Username, {Tid, ProperLoginTicket}};
+						true ->
+							NewActiveTids = [Tid|ActiveTids], 
+							Pid ! {accept_tournament, self(), Username, {Tid, ProperLoginTicket}}
+					end
 			end,
-			handleMessages(Username, LoginTicket, NewActiveTids, IsLoggingOut, SysManagers);
+			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{end_tournament, Pid, Username, {Tid}} ->
 			io:format("Received an end_tournament message~n"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
-			handleMessages(Username, LoginTicket, NewActiveTids, IsLoggingOut, SysManagers);
+			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard}} ->
 			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard),
 			io:format("Received a play_request message~n");
 		Message ->
 			io:format("Received malformed message: ~p~n", [Message]),
-			handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers)
+			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut)
 	end.
 
-% handles all the logic for calculating the best move (according to expected
-% value), and sends that message back to the ref.
+% Handles all the logic for determining what dice to keep
+% and what move to make, by calculating the expected value of all
+% possible arrangements and choosing the best of those.
 playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard) ->
 	if
 		RollNumber == 3 -> % if on last roll, just give the best move we can do.
@@ -111,10 +125,9 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard
 					io:format("Best move is: ~p", [KeepMove]), 
 					Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
 			end
-			% [OneChangeScore, OneChangeMove, DiceToChange] = oneChangeMove(Dice, Scorecard),
 	end.
 
-% given a particular set of changes, dice and scorecard, calculates the expected value of those changes,
+% Given a particular set of changes, dice and scorecard, calculates the expected value of those changes,
 % which is the average of all possible configurations that can result from this.
 getExpectedScore(DiceChanges, Dice, Scorecard) ->
 	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice changes
@@ -122,15 +135,15 @@ getExpectedScore(DiceChanges, Dice, Scorecard) ->
 	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls), % get all the best moves
 	% io:format("got here"),
 	% io:format("ListDieScores is: ~p~n", [ListDieScores]),
-	Sum = lists:sum(ListDieScores),
-	% io:format("Sum is: ~p~n", [Sum]),
-	Length = length(ListDieScores),
-	% io:format("Length is: ~p~n", [Length]),
-	Sum / length(ListDieScores).
-	% lists:sum(ListDieScores) / length(ListDieScores).
+	% Sum = lists:sum(ListDieScores),
+	% % io:format("Sum is: ~p~n", [Sum]),
+	% Length = length(ListDieScores),
+	% % io:format("Length is: ~p~n", [Length]),
+	% Sum / length(ListDieScores).
+	lists:sum(ListDieScores) / length(ListDieScores).
 
-% Gets a list of lists, each sub-list consisting of five elements.
-% Fixes our mangling below.
+% Gets a flattened list of dice or changes to make,
+% outputs a list of lists, where each sublist is 5 die or changes.
 fixFlatten(List, NewList) ->
 	if
 		List == [] ->
@@ -208,7 +221,6 @@ bestMove(Dice, Scorecard) ->
 
 	% special case of a three of a kind when we should've done four of a kind
 	% (because it is rarer, even though they give same point value)
-
 	case ((MaxMove == ?THREEKIND) and (MaxScore == lists:nth(?FOURKIND, AllScores))) of
 		true ->
 			AdjustedMaxMove = ?FOURKIND;
@@ -231,7 +243,7 @@ calcUpper(Dice, Score, Num) ->
 	NewScore.
 
 % Given dice and scorecard, calculate the score for a three of a kind.
-% (A three of a kind is also a valid four of a kind or Yahtzee.)
+% (A three of a kind can also be a valid four of a kind or Yahtzee.)
 calcThreeKind(Dice, Score) ->
 	if
 		Score /= -1 ->
@@ -253,7 +265,7 @@ calcThreeKind(Dice, Score) ->
 	end.
 
 % Given dice and scorecard, calculate score for a four of a kind.
-% (A four of a kind is also a valid Yahtzee.)
+% (A four of a kind can also be a valid Yahtzee.)
 calcFourKind(Dice, Score) ->
 	if
 		Score /= -1 ->
