@@ -1,5 +1,8 @@
 -module(yahtzee_player1).
--export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, getExpectedScore/3, playMove/9]).
+-export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, 
+		 getExpectedScore/3, playMove/9, calcUpper/3, calcThreeKind/2, calcFourKind/2,
+		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
+		 calcChance/2]).
 -define(TIMEOUT, 2000).
 
 -define(ACES, 1).
@@ -87,8 +90,9 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard}} ->
+			io:format("Received a play_request message~n"),
 			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard),
-			io:format("Received a play_request message~n");
+			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut);
 		Message ->
 			io:format("Received malformed message: ~p~n", [Message]),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut)
