@@ -1,0 +1,61 @@
+external_controller:
+	- parameters are generated here and kept track based on the messages below:
+		- request_tournament: { num-players, games-per-match }
+		- tournament_info: { tid }
+		- user_info: { username }
+
+system_manager (sid, nodename, nodename@host):
+	- [tid] (list of tournament_manager)
+	- [{pid, username, password, login_ticket, is_login}]
+
+tournament_manager (tid):
+	- num_players (int)
+	- games_per_match (int)
+	- [username]
+	- status:
+		- in_progress (atom)
+		- completed (atom)
+	- [gid] (list of referee)
+	- bracket-structure (nested list)
+
+referee/game_manager (gid):
+	- first_player (player)
+	- first_player_scorecard (scorecard)
+	- second_player (player)
+	- second_player_scorecard (scorecard)
+	- roll_sequence (list of ints)
+
+player (pid):
+	- username
+	- login_ticket (ref)
+	- [active_tid] (list of pids)
+	- is_log_out (bool)
+	- [system_manager]
+
+scorecard ([14 ints]):
+	- -1 = no fill
+	- other numbers = score in each category
+
+username (string)
+password (string)
+
+messages:
+	- system_manager -> player:
+		- logged_in: { login-ticket }
+		- start_tournament: { tid }
+		- end_tournament: { tid }
+		- play_request: { ref, tid, gid, roll-number, dice, scorecard, opponent-scorecard }
+	- player -> system_manager
+		- login:  { username, password }
+		- logout: { login-ticket }
+		- accept_tournament: { tid, login-ticket }
+		- reject_tournament: { tid, login-ticket }
+		- play_action: { ref, tid, gid, roll-number, dice-to-keep, scorecard-line }
+	- external_controller -> system_manager
+		- request_tournament: { num-players, games-per-match }
+		- tournament_info: { tid }
+		- user_info: { username }
+	- system_manager -> external_controller
+		- tournament_started: { tid, players, optional-data }
+		- tournament_status: { tid, status, winner, optional-data }
+		- user_status: { username, match-wins, match-losses, tournaments-played, tournament-wins }

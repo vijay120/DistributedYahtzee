@@ -1,7 +1,8 @@
-erlc referee.erl
-erlc yahtzee_manager.erl
-erlc player.erl
 erlc externall_controller.erl
+erlc yahtzee_manager.erl
+erlc tournament_manager.erl
+erlc referee.erl
+erlc player.erl
 
 node_name=node_name
 full_node_name=$node_name@$(hostname -s)

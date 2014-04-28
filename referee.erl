@@ -4,7 +4,7 @@
 %% @author Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
 -module(referee).
 
--import(distributed_yahtzee, [println/1, println/2]).
+-import(yahtzee_manager, [println/1, println/2]).
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
