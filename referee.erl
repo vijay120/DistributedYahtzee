@@ -5,6 +5,7 @@
 -module(referee).
 
 -import(distributed_yahtzee, [println/1, println/2]).
+%-import(yahtzee_player1, []).
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
@@ -19,6 +20,7 @@
 -define(NEXTDIE, 5).
 -define(STARTINDEX, 1).
 -define(FIRSTROUND, 1).
+-define(INITIALSCORE, 0).
 
 %% ====================================================================
 %%                            Main Function
@@ -39,6 +41,8 @@ findMyPlayersAndGameId() ->
 			io:format("PlayerAPid is ~p", [PlayerAPid]),
 			io:format("PlayerBPid is ~p", [PlayerBPid]),
 			io:format("GameID is ~p", [GameId]),
+			io:format("Player A userid is ~p", [PlayerAName]),
+			io:format("Player B userid is ~p", [PlayerBName]),
 			initiateGame(PlayerAName, PlayerAPid, PlayerBName, PlayerBPid, GameId, TournamentId);
 		_ -> io:format("whateves man")
 	end.
@@ -60,18 +64,30 @@ initiateGame(PlayerAName, PlayerAPid, PlayerBName, PlayerBPid, GameId, Tournamen
 					GameId, 
 					?FIRSTROUND, 
 					PlayerAName, PlayerBName, 
+					?INITIALSCORE, ?INITIALSCORE,
 					ScorecardA, ScorecardB, 
 					DieOutcomesA, DieOutcomesB, 
 					PlayerAPid, PlayerBPid, 
 					ChoiceA, ChoiceB
 				).
 
+%This function handles all the logic and enforcement of rukes
+% score_logic(ScoreCard, ScoreCardChoice, DiceGiven) ->
+	
+% 	case ScoreCardChoice of
+% 		% Aces: Find all the aces in the dice given
+% 		1 -> 
+% 			Score = length(lists:filter(fun(X) -> X == 1 end, DiceGiven))
+
+
+
 
 handle_round(	Tid, 
 				Gid, 
 				Round, 
 				PlayerAName, PlayerBName, 
-				PlayerAScore, PlayerBScore, 
+				PlayerAScore, PlayerBScore,
+				PlayerAScoreCard, PlayerBScoreCard, 
 				DieOutcomesA, DieOutcomesB, 
 				PlayerAPid, PlayerBPid, 
 				ChoiceA, ChoiceB) ->
@@ -80,26 +96,62 @@ handle_round(	Tid,
 		%The last round is over, so pass the results to the tournament manager
 		io:format("I will have to do this later");
 		true -> 
+
+			io:format("In the round less than 3 section~n"),
 			%Step 1: Calculate the dies that need to be send for each player
 			DieToA = send_die_from_choice(DieOutcomesA, ChoiceA, Round, ?STARTINDEX, []),
 			%Step 2: Send the message!
-			{player, vijay120@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Round, DieToA, PlayerAScore, PlayerBScore}},
+			{player, vijay120@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Round, DieToA, PlayerAScoreCard, PlayerBScoreCard}},
 
 			DieToB = send_die_from_choice(DieOutcomesB, ChoiceB, Round, ?STARTINDEX, []),
-			{player, vijay120@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Round, DieToB, PlayerBScore, PlayerAScore}},
+			{player, vijay120@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Round, DieToB, PlayerBScoreCard, PlayerAScoreCard}},
 
 			%Recieve for player A only
 			receive
-				{play_action, PidA, PlayerAName, {RefA, TidA, GidA, RollNumberA, DiceToKeepA, ScorecardA}} -> 
+				{play_action, PidA, PlayerAName, {RefA, TidA, GidA, RollNumberA, DiceToKeepA, ScorecardAChoice}} -> 
 					%Receive for player B only
 					receive
-						{play_action, PidB, PlayerBName, {RefB, TidB, GidB, RollNumberB, DiceToKeepB, ScorecardB}} -> 
+						{play_action, PidB, PlayerBName, {RefB, TidB, GidB, RollNumberB, DiceToKeepB, ScorecardBChoice}} -> 
+
+
+							ValueAtScoreCardRowForA = lists:nth(ScorecardAChoice, PlayerAScoreCard),
+							ValueAtScoreCardRowForB = lists:nth(ScorecardBChoice, PlayerBScoreCard),
+							%check if the slots are already taken
+							if 
+								ValueAtScoreCardRowForA =/= -1
+										-> io:format("A cheated");
+								true 	-> io:format("A has a valid move")
+							end,
+
+							%PlayerAScore = score_logic(ScorecardAChoice, DieToA),
+							NewPlayerAScore = 1,
+
+							%Mark A's score card
+							NewScorecardA = element(1, lists:split(ScorecardAChoice-1, PlayerAScoreCard)) ++ 
+											[NewPlayerAScore] ++ 
+											element(2, lists:split(ScorecardAChoice, PlayerAScoreCard)),
+
+							%check if the slots are already taken
+							if ValueAtScoreCardRowForB =/= -1 
+										-> io:format("B cheated");
+								true 	-> io:format("B has a valid move")
+							end,
+
+							%PlayerBScore = score_logic(ScorecardBChoice, DieToB),
+							NewPlayerBScore = 1,
+
+							NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
+											[NewPlayerBScore] ++ 
+											element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
+
+
 							handle_round(	Tid, 
 											Gid, 
 											Round+1, 
 											PlayerAName, PlayerBName, 
-											ScorecardA, ScorecardB, 
-											DiceToKeepA, DiceToKeepB, 
+											NewPlayerAScore, NewPlayerBScore,
+											NewScorecardA, NewScorecardB, 
+											DieOutcomesA, DieOutcomesB, 
 											PidA, PidB, 
 											DiceToKeepA, DiceToKeepB);
 						_ -> io:format("Invalid message type")

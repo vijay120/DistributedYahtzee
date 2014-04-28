@@ -75,7 +75,8 @@ handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers) ->
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard}} ->
 			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard),
-			io:format("Received a play_request message~n");
+			io:format("Received a play_request message~n"),
+			handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers);
 		Message ->
 			io:format("Received malformed message: ~p~n", [Message]),
 			handleMessages(Username, LoginTicket, ActiveTids, IsLoggingOut, SysManagers)
