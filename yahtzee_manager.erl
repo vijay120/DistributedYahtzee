@@ -142,7 +142,6 @@ listen(TournamentManagerTids, UserTables) ->
     %         not previously registered with the system, it is registered
     %         when the first login is received for that username.
     %         There is no mechanism for changing passwords.
-
     {login, Pid, _Username, {Username, Password}} ->
         % The following message types can be sent from the rest of the system to
         % a player:
