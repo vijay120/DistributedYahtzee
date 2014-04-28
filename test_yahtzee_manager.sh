@@ -1,7 +1,7 @@
-erlc referee.erl
 erlc yahtzee_manager.erl
+erlc tournament_manager.erl
+erlc referee.erl
 erlc player.erl
-erlc externall_controller.erl
 
 node_name=node_name
 erl -noshell -run yahtzee_manager main $node_name

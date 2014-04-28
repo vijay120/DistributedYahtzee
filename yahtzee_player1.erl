@@ -1,6 +1,6 @@
 -module(yahtzee_player1).
 -export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, 
-		 getExpectedScore/3, playMove/9, calcUpper/3, calcThreeKind/2, calcFourKind/2,
+		 getExpectedScore/3, playMove/8, calcUpper/3, calcThreeKind/2, calcFourKind/2,
 		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
 		 calcChance/2]).
 -define(TIMEOUT, 2000).
@@ -84,14 +84,14 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 					end
 			end,
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
-		{end_tournament, Pid, Username, {Tid}} ->
+		{end_tournament, _, Username, {Tid}} ->
 			io:format("Received an end_tournament message~n"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
-			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard}} ->
+			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, _}} ->
 			io:format("Received a play_request message~n"),
-			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard),
+			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut);
 		Message ->
 			io:format("Received malformed message: ~p~n", [Message]),
@@ -101,7 +101,7 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 % Handles all the logic for determining what dice to keep
 % and what move to make, by calculating the expected value of all
 % possible arrangements and choosing the best of those.
-playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard) ->
+playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 	if
 		RollNumber == 3 -> % if on last roll, just give the best move we can do.
 			[_, Move] = bestMove(Dice, Scorecard),
