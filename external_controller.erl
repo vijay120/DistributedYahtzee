@@ -6,12 +6,12 @@
 
 %% Example:
 
-% {ash:1} erl -noshell -run external_controller main $node_name $full_node_name $action
+% {ash:1} erl -noshell -run external_controller main $full_node_name $action
 
-% e.g. (node_name=node, full_node_name=node@host)
+% e.g. full_node_name=node@host
 %
 % action = 
-%   request_tournament NumPlayers GamePerMatch
+%   request_tournament NumPlayers GamesPerMatch
 %   tournament_info TournamentId
 %   user_info Username
 
@@ -37,7 +37,7 @@ loop_once() ->
     %     > players is a list of the usernames assigned to play in the
     %        tournament, and optional-data is optional implementation-dependent
     %        data about the tournament (such as a representation of the bracket).
-    %        (Sent in response to a start-tournament.)
+    %        (Sent in response to a request_tournament.)
     {tournament_started, Pid, {Tid, Players, OptionalData}} ->
       printnameln("The list of players is ~p", [Players]);
 
@@ -84,10 +84,10 @@ loop_once() ->
 
 
 main(Params) ->
-  NodeName = list_to_atom(hd(Params)),
-  SystemManagerNode = list_to_atom(hd(tl(Params))),
-  Action = hd(tl(tl(Params))),
-  TheRest = tl(tl(tl(Params))),
+  NodeName = yahtzee_manager,
+  SystemManagerNode = list_to_atom(hd(Params)),
+  Action = hd(tl(Params)),
+  TheRest = tl(tl(Params)),
   net_kernel:start([external_controller, shortnames]),
 
   % ======== START boilerplate code to connect to global registry =========
@@ -121,13 +121,13 @@ main(Params) ->
       case length(TheRest) of
         2 ->
           NumPlayersString = hd(TheRest),
-          GamePerMatchString = hd(tl(TheRest)),
+          GamesPerMatchString = hd(tl(TheRest)),
           NumPlayers = list_to_integer(NumPlayersString),
-          GamePerMatch = list_to_integer(GamePerMatchString),
+          GamesPerMatch = list_to_integer(GamesPerMatchString),
           printnameln("Sending a tournament_request message with " ++
-            "data = {~p, ~p}...", [NumPlayers, GamePerMatch]),
+            "data = {~p, ~p}...", [NumPlayers, GamesPerMatch]),
           {NodeName, SystemManagerNode} !
-            {request_tournament, self(), {NumPlayers, GamePerMatch}};
+            {request_tournament, self(), {NumPlayers, GamesPerMatch}};
         _ ->
           halt("Error: There should be exactly two parameters after " ++
             "the keyword 'request_tournament'")

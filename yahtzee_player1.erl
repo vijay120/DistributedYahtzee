@@ -1,6 +1,6 @@
 -module(yahtzee_player1).
 -export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, 
-		 getExpectedScore/3, playMove/9, calcUpper/3, calcThreeKind/2, calcFourKind/2,
+		 getExpectedScore/3, playMove/8, calcUpper/3, calcThreeKind/2, calcFourKind/2,
 		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
 		 calcChance/2]).
 -define(TIMEOUT, 2000).
@@ -27,14 +27,10 @@ main(Params) ->
 	Password = hd(tl(tl(Params))),
 	SysManagers = tl(tl(tl(Params))), % will be a list of them
 
-	% TODO: as per ongoing Moodle discussion, sysmanagers register as yahtzee_manager
-	% 		so we don't specify it on the command line.
-
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
-	register(player, self()), % TODO: name might change
+	register(player, self()), % Useful for testing to send message by node name
 
-	% register with all system managers. According to assignment the names are their
-	% globally registered ones.
+	% register with all system managers
 	io:format("Just before global send SysManagers: ~p~n", [SysManagers]),
 	lists:map(fun(X) -> net_kernel:connect_node(X) end, SysManagers),
 	lists:map(fun(X) -> {yahtzee_manager, X} ! {login, self(), Username, {Username, Password}} end, SysManagers),
@@ -43,21 +39,22 @@ main(Params) ->
 
 	handleMessages(Username, [], [], false).
 
+
+% Username:		As specified on the command line.
+% ActiveTids: 	A list of Tids.
+% LoginTickets: A list of tuples, {Pid, LoginTicket}, so we can associate it with the
+% 				proper system manager. (As per Moodle protocol clarification.)
 % IsLoggingOut: A boolean if we want to log out, in which case we reject
-% any new tournaments and wait until all our active tourneys are done,
-% and then finally log out.
-%
-% LoginTickets is now a tuple, {Pid, LoginTicket}, so we can associate it with the 
-% proper system manager. (As per Moodle protocol clarification.)
+% 				any new tournaments and wait until all our active 
+%				tourneys are done, and then finally log out.
 handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
-	io:format("In handleMessages with username: ~p, LoginTicketss: ~p, ActiveTids: ~p~n",
+	io:format("In handleMessages with username: ~p, LoginTickets: ~p, ActiveTids: ~p~n",
 			  						  [Username, LoginTickets, ActiveTids]),
 		% Logs us out if we want to and are in no active tournaments.
 	if  % Currently this will never run as we never actually want to
 	    % programmatically log out.
 		IsLoggingOut and ActiveTids == [] ->
 			lists:map(fun({Pid, LoginTicket}) -> Pid ! {logout, self(), Username, {LoginTicket}} end, LoginTickets);
-			% lists:map(fun(X) -> global:send(X, {logout, self(), Username, {LoginTickets}}) end, SysManagers);
 		true ->
 			true
 	end,
@@ -84,14 +81,14 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 					end
 			end,
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
-		{end_tournament, Pid, Username, {Tid}} ->
+		{end_tournament, _, Username, {Tid}} ->
 			io:format("Received an end_tournament message~n"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
-			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard}} ->
+			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, _}} ->
 			io:format("Received a play_request message~n"),
-			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard),
+			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut);
 		Message ->
 			io:format("Received malformed message: ~p~n", [Message]),
@@ -100,8 +97,9 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 
 % Handles all the logic for determining what dice to keep
 % and what move to make, by calculating the expected value of all
-% possible arrangements and choosing the best of those.
-playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard) ->
+% possible arrangements and choosing the best of those,
+% then sending this reply back to the Pid that sent play_request.
+playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 	if
 		RollNumber == 3 -> % if on last roll, just give the best move we can do.
 			[_, Move] = bestMove(Dice, Scorecard),
@@ -134,16 +132,10 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard, OppScorecard
 % Given a particular set of changes, dice and scorecard, calculates the expected value of those changes,
 % which is the average of all possible configurations that can result from this.
 getExpectedScore(DiceChanges, Dice, Scorecard) ->
-	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice changes
+	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice rolls
 	% io:format("PossibleDieRolls are: ~p~n", [PossibleDieRolls]),
-	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls), % get all the best moves
-	% io:format("got here"),
+	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls),
 	% io:format("ListDieScores is: ~p~n", [ListDieScores]),
-	% Sum = lists:sum(ListDieScores),
-	% % io:format("Sum is: ~p~n", [Sum]),
-	% Length = length(ListDieScores),
-	% % io:format("Length is: ~p~n", [Length]),
-	% Sum / length(ListDieScores).
 	lists:sum(ListDieScores) / length(ListDieScores).
 
 % Gets a flattened list of dice or changes to make,
@@ -156,8 +148,9 @@ fixFlatten(List, NewList) ->
 			fixFlatten(lists:sublist(List, 6, length(List)), [lists:sublist(List, 5)| NewList])
 	end.
 
-% Generates all combinations of booleans, as a really mangled list of lists.
+% Generates all combinations of booleans, as a mangled list of lists.
 % Can be flattened and then take five at a time to create a proper list of lists.
+% Note that that is handled on the caller side.
 generateDiceChanges(NumLeft, AccumList) ->
 	if
 		NumLeft == 0 ->

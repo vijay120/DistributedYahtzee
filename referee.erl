@@ -8,6 +8,7 @@
 -import(yahtzee_player1, [calcUpper/3, calcThreeKind/2, calcFourKind/2,
 		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
 		 calcChance/2]).
+
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
