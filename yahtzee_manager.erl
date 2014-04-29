@@ -39,7 +39,7 @@ main(Params) ->
       printnameln("Fail to start kernel! intended shortnames: ~p,", [NodeName]),
       printnameln("Reason: ~p", [TheReason])
   end,
-  register(NodeName, self()),
+  register(yahtzee_manager, self()),
   printnameln("Registered with the process name = ~p, nodename = ~p",
     [NodeName, node()]),
   TournamentManagerTids = [],

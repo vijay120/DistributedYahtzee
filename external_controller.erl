@@ -6,9 +6,9 @@
 
 %% Example:
 
-% {ash:1} erl -noshell -run external_controller main $node_name $full_node_name $action
+% {ash:1} erl -noshell -run external_controller main $full_node_name $action
 
-% e.g. (node_name=node, full_node_name=node@host)
+% e.g. full_node_name=node@host
 %
 % action = 
 %   request_tournament NumPlayers GamesPerMatch
@@ -84,10 +84,10 @@ loop_once() ->
 
 
 main(Params) ->
-  NodeName = list_to_atom(hd(Params)),
-  SystemManagerNode = list_to_atom(hd(tl(Params))),
-  Action = hd(tl(tl(Params))),
-  TheRest = tl(tl(tl(Params))),
+  NodeName = yahtzee_manager,
+  SystemManagerNode = list_to_atom(hd(Params)),
+  Action = hd(tl(Params)),
+  TheRest = tl(tl(Params)),
   net_kernel:start([external_controller, shortnames]),
 
   % ======== START boilerplate code to connect to global registry =========
