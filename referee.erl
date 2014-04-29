@@ -23,7 +23,15 @@
 -define(NEXTDIE, 5).
 -define(STARTINDEX, 1).
 -define(FIRSTROUND, 1).
--define(INITIALSCORE, 0).
+-define(INITIALSCORE, -12).
+-define(THREEKIND, 7).
+-define(FOURKIND, 8).
+-define(FULLHOUSE, 9).
+-define(SMALLSTRAIGHT, 10).
+-define(LARGESTRAIGHT, 11).
+-define(YAHTZEE, 12).
+-define(CHANCE, 13).
+-define(UPPERCARDS, 7).
 
 %% ====================================================================
 %%                            Main Function
@@ -75,14 +83,22 @@ initiateGame(PlayerAName, PlayerAPid, PlayerBName, PlayerBPid, GameId, Tournamen
 				).
 
 %This function handles all the logic and enforcement of rukes
-% score_logic(ScoreCard, ScoreCardChoice, DiceGiven) ->
+score_logic(ScoreCard, ScoreCardChoice, DiceGiven) ->
+	if ScoreCardChoice < ?UPPERCARDS ->
+		yahtzee_player1:calcUpper(DiceGiven, ScoreCard, ScoreCardChoice);
+		true ->
+			case ScoreCardChoice of
+				?THREEKIND -> yahtzee_player1:calcThreeKind(DiceGiven, lists:nth(?THREEKIND, ScoreCard));
+				?FOURKIND -> yahtzee_player1:calcFourKind(DiceGiven, lists:nth(?FOURKIND, ScoreCard));
+				?FULLHOUSE -> yahtzee_player1:calcFullHouse(DiceGiven, lists:nth(?FULLHOUSE, ScoreCard));
+				?SMALLSTRAIGHT -> yahtzee_player1:calcSmallStraight(DiceGiven, lists:nth(?SMALLSTRAIGHT, ScoreCard));
+				?LARGESTRAIGHT -> yahtzee_player1:calcLargeStraight(DiceGiven, lists:nth(?LARGESTRAIGHT, ScoreCard));
+				?YAHTZEE -> yahtzee_player1:calcYahtzee(DiceGiven, lists:nth(?YAHTZEE, ScoreCard));
+				?CHANCE -> yahtzee_player1:calcChance(DiceGiven, lists:nth(?CHANCE, ScoreCard))
+		end
+	end.
+
 	
-% 	case ScoreCardChoice of
-% 		% Aces: Find all the aces in the dice given
-% 		1 -> 
-% 			Score = length(lists:filter(fun(X) -> X == 1 end, DiceGiven))
-
-
 handle_round(	Tid, 
 				Gid, 
 				Round, 
@@ -95,17 +111,23 @@ handle_round(	Tid,
 
 	if Round > 3 ->
 		%The last round is over, so pass the results to the tournament manager
-		io:format("I will have to do this later");
+		io:format("Player A's score is: ~p~n", [PlayerAScore]),
+		io:format("Player B's score is: ~p~n", [PlayerBScore]),
+
+		if PlayerAScore > PlayerBScore -> io:format("Player A wins");
+			true -> io:format("Player B wins!")
+		end;
 		true -> 
 
 			io:format("In the round less than 3 section~n"),
 			%Step 1: Calculate the dies that need to be send for each player
+			io:format("Sendin handle for A~n"),
 			DieToA = send_die_from_choice(DieOutcomesA, ChoiceA, Round, ?STARTINDEX, []),
 			%Step 2: Send the message!
-			{player, vijay120@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Round, DieToA, PlayerAScoreCard, PlayerBScoreCard}},
-
+			{player, enuge@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Round, DieToA, PlayerAScoreCard, PlayerBScoreCard}},
+			io:format("Sendin handle for B~n"),
 			DieToB = send_die_from_choice(DieOutcomesB, ChoiceB, Round, ?STARTINDEX, []),
-			{player, vijay120@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Round, DieToB, PlayerBScoreCard, PlayerAScoreCard}},
+			{player, enuge@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Round, DieToB, PlayerBScoreCard, PlayerAScoreCard}},
 
 			%Recieve for player A only
 			receive
@@ -113,7 +135,6 @@ handle_round(	Tid,
 					%Receive for player B only
 					receive
 						{play_action, PidB, PlayerBName, {RefB, TidB, GidB, RollNumberB, DiceToKeepB, ScorecardBChoice}} -> 
-
 
 							ValueAtScoreCardRowForA = lists:nth(ScorecardAChoice, PlayerAScoreCard),
 							ValueAtScoreCardRowForB = lists:nth(ScorecardBChoice, PlayerBScoreCard),
@@ -124,8 +145,12 @@ handle_round(	Tid,
 								true 	-> io:format("A has a valid move")
 							end,
 
-							%PlayerAScore = score_logic(ScorecardAChoice, DieToA),
-							NewPlayerAScore = 1,
+							io:format("Player A's scorecard is: ~p~n", [PlayerAScoreCard]),
+							io:format("Player A's choice is: ~p~n", [ScorecardAChoice]),
+							io:format("Player A's die is: ~p~n", [DieToA]),
+
+							NewPlayerAScore = score_logic(PlayerAScoreCard, ScorecardAChoice, DieToA),
+							io:format("Player A scores: ~p~n", [NewPlayerAScore]),
 
 							%Mark A's score card
 							NewScorecardA = element(1, lists:split(ScorecardAChoice-1, PlayerAScoreCard)) ++ 
@@ -138,19 +163,28 @@ handle_round(	Tid,
 								true 	-> io:format("B has a valid move")
 							end,
 
-							%PlayerBScore = score_logic(ScorecardBChoice, DieToB),
-							NewPlayerBScore = 1,
+							io:format("Player B's scorecard is: ~p~n", [PlayerBScoreCard]),
+							io:format("Player B's choice is: ~p~n", [ScorecardBChoice]),
+							io:format("Player B's die is: ~p~n", [DieToB]),
+
+							NewPlayerBScore = score_logic(PlayerBScoreCard, ScorecardBChoice, DieToB),
+							io:format("Player B scores: ~p~n", [NewPlayerBScore]),
+
 
 							NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
 											[NewPlayerBScore] ++ 
 											element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
+
+							TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
+							TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
+
 
 
 							handle_round(	Tid, 
 											Gid, 
 											Round+1, 
 											PlayerAName, PlayerBName, 
-											NewPlayerAScore, NewPlayerBScore,
+											TotalScoreForA, TotalScoreForB,
 											NewScorecardA, NewScorecardB, 
 											DieOutcomesA, DieOutcomesB, 
 											PidA, PidB, 
@@ -165,12 +199,19 @@ handle_round(	Tid,
 
 %this method is used to find the next roll to die to pass on to the players
 send_die_from_choice(DieSequence, Choice, Round, CurrentIndex, AccumulatedDieSeq) ->
-	io:format("The die sequence is ~p~n", [DieSequence]),
+	% io:format("The die sequence is ~p~n", [DieSequence]),
+	% io:format("The current index is ~p~n", [CurrentIndex]),
+	% io:format("The choice is ~p~n", [Choice]),
 	if  CurrentIndex > length(Choice) -> AccumulatedDieSeq;
 	true -> 
 		Boolean = lists:nth(CurrentIndex, Choice),
 		if Boolean == false -> 
-			NewAccumulatedDieSeq = AccumulatedDieSeq ++ [lists:nth(CurrentIndex*Round + ?NEXTDIE, DieSequence)],
+			% io:format("The die sequence inside the if statement is ~p~n", [DieSequence]),
+			NextIndex = CurrentIndex*(Round-1) + ?NEXTDIE,
+			% io:format("The next index is: ~p~n", [NextIndex]),
+			Problem = lists:nth(NextIndex, DieSequence),
+			% io:format("Problem is: ~p~n", [Problem]),
+			NewAccumulatedDieSeq = AccumulatedDieSeq ++ [lists:nth(NextIndex, DieSequence)],
 			send_die_from_choice(DieSequence, Choice, Round, CurrentIndex+1, NewAccumulatedDieSeq);
 		true -> 
 			NewAccumulatedDieSeq = AccumulatedDieSeq ++ [lists:nth(CurrentIndex, DieSequence)],
