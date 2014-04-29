@@ -5,7 +5,9 @@
 -module(referee).
 
 -import(distributed_yahtzee, [println/1, println/2]).
-%-import(yahtzee_player1, []).
+-import(yahtzee_player1, [calcUpper/3, calcThreeKind/2, calcFourKind/2,
+		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
+		 calcChance/2]).
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
@@ -78,8 +80,6 @@ initiateGame(PlayerAName, PlayerAPid, PlayerBName, PlayerBPid, GameId, Tournamen
 % 		% Aces: Find all the aces in the dice given
 % 		1 -> 
 % 			Score = length(lists:filter(fun(X) -> X == 1 end, DiceGiven))
-
-
 
 
 handle_round(	Tid, 
@@ -164,6 +164,7 @@ handle_round(	Tid,
 
 %this method is used to find the next roll to die to pass on to the players
 send_die_from_choice(DieSequence, Choice, Round, CurrentIndex, AccumulatedDieSeq) ->
+	io:format("The die sequence is ~p~n", [DieSequence]),
 	if  CurrentIndex > length(Choice) -> AccumulatedDieSeq;
 	true -> 
 		Boolean = lists:nth(CurrentIndex, Choice),
