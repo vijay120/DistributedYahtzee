@@ -1,4 +1,4 @@
-erlc externall_controller.erl
+erlc external_controller.erl
 erlc yahtzee_manager.erl
 erlc tournament_manager.erl
 erlc referee.erl
