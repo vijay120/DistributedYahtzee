@@ -6,7 +6,8 @@ external_controller:
 
 system_manager (sid, nodename, nodename@host):
 	- [tid] (list of tournament_manager)
-	- [{pid, username, password, login_ticket, is_login}]
+	- [{pid, username, password, login_ticket, is_login,
+		match-wins, match-losses, tournaments-played, tournament-wins}]
 
 tournament_manager (tid):
 	- num_players (int)
@@ -59,3 +60,5 @@ messages:
 		- tournament_started: { tid, players, optional-data }
 		- tournament_status: { tid, status, winner, optional-data }
 		- user_status: { username, match-wins, match-losses, tournaments-played, tournament-wins }
+	- referee -> referee OR tournament_manager -> yahtzee_manager
+		- results: {Pid, {[{Username, MatchWins, MatchLosses}], Winner}}
