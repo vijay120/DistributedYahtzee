@@ -228,7 +228,7 @@ bestMove(Dice, Scorecard) ->
 	% io:format("MaxScore is: ~p, MaxMove is: ~p~n", [MaxScore, AdjustedMaxMove]),
 	[MaxScore, AdjustedMaxMove].
 
-% Given the dice and scorecard and number on the upper board (i.e. ones, twos...sixes)
+% Given the dice and scorecard index value and number on the upper board (i.e. ones, twos...sixes)
 % Calculate the score for that particular move.
 calcUpper(Dice, Score, Num) ->
 	if
