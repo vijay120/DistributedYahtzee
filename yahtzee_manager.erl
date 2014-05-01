@@ -91,7 +91,7 @@ listen(TournamentManagerTids, UserTables) ->
         printnameln("tournament process spawned! Its TID is ~p", [Tid]),
 
         NewTournamentManagerTids = TournamentManagerTids ++ [Tid],
-        listen(TournamentManagerTids, UserTables);
+        listen(NewTournamentManagerTids, UserTables);
         
     % tournament-info - data is a tournament ID 
     {tournament_info, Pid, {TournamentId}} ->
