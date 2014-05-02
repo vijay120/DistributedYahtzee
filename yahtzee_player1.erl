@@ -1,8 +1,20 @@
+%% CSCI182E - Distributed Systems
+%% Harvey Mudd College
+%% Distributed Yahtzee
+%% @author Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
 -module(yahtzee_player1).
+-import(yahtzee_manager, [println/1, println/2]).
+%% ====================================================================
+%%                             Public API
+%% ====================================================================
 -export([main/1, bestMove/2, generateDiceChanges/2, generateDiceRolls/3, fixFlatten/2, 
 		 getExpectedScore/3, playMove/8, calcUpper/3, calcThreeKind/2, calcFourKind/2,
 		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
 		 calcChance/2]).
+%% ====================================================================
+%%                             Constants
+%% ====================================================================
+-define(GLOBALNAME, "YahtzeePlayer1").
 -define(TIMEOUT, 2000).
 
 -define(ACES, 1).
@@ -19,26 +31,30 @@
 -define(YAHTZEE, 12).
 -define(CHANCE, 13).
 
+%% ====================================================================
+%%                            Main Function
+%% ====================================================================
 main(Params) ->
-	io:format("In main"),
+	printnameln("In main"),
 	%set up network connections
 	_ = os:cmd("epmd -daemon"),
-	Reg_name = hd(Params),
+	RegName = hd(Params),
 	Username = hd(tl(Params)),
 	Password = hd(tl(tl(Params))),
 	SysManagers = tl(tl(tl(Params))), % will be a list of them
 
 	SystManagersAtoms = lists:map(fun(X) -> list_to_atom(X) end, SysManagers),
-	io:format("before netstart"),
-	net_kernel:start([list_to_atom(Reg_name), shortnames]),
+	printnameln("before netstart"),
+	net_kernel:start([list_to_atom(RegName), shortnames]),
 	register(player, self()), % Useful for testing to send message by node name
 
 	% register with all system managers
-	io:format("Just before global send SysManagers: ~p~n", [SystManagersAtoms]),
+	printnameln("Just before global send SysManagers: ~p", [SystManagersAtoms]),
 	lists:map(fun(X) -> net_kernel:connect_node(X) end, SystManagersAtoms),
-	lists:map(fun(X) -> {yahtzee_manager, X} ! {login, self(), Username, {Username, Password}} end, SystManagersAtoms),
+	lists:map(fun(X) -> {yahtzee_manager, X} !
+		{login, self(), Username, {Username, Password}} end, SystManagersAtoms),
 
-	io:format("My PID is: ~p", [self()]),
+	printnameln("My PID is: ~p", [self()]),
 
 	handleMessages(Username, [], [], false).
 
@@ -51,7 +67,7 @@ main(Params) ->
 % 				any new tournaments and wait until all our active 
 %				tourneys are done, and then finally log out.
 handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
-	io:format("In handleMessages with username: ~p, LoginTickets: ~p, ActiveTids: ~p~n",
+	printnameln("In handleMessages with username: ~p, LoginTickets: ~p, ActiveTids: ~p",
 			  						  [Username, LoginTickets, ActiveTids]),
 		% Logs us out if we want to and are in no active tournaments.
 	if  % Currently this will never run as we never actually want to
@@ -64,14 +80,14 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 
 	receive
 		{logged_in, Pid, Username, {NewLoginTicket}} ->
-			io:format("Received a logged_in message~n"),
+			printnameln("Received a logged_in message"),
 			handleMessages(Username, [{Pid, NewLoginTicket} | LoginTickets], ActiveTids, IsLoggingOut);
 		{start_tournament, Pid, Username, {Tid}} ->
-			io:format("Received a start_tournament message~n"),
+			printnameln("Received a start_tournament message"),
 			{_, ProperLoginTicket} = lists:keyfind(Pid, 1, LoginTickets),
 			if
 				ProperLoginTicket == false ->
-					io:format("No PID matches this login ticket."),
+					printnameln("No PID matches this login ticket."),
 					NewActiveTids = ActiveTids;
 				true ->
 					if
@@ -85,17 +101,17 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 			end,
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{end_tournament, _, Username, {Tid}} ->
-			io:format("Received an end_tournament message~n"),
+			printnameln("Received an end_tournament message"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, _}} ->
-			io:format("Pid for sender should be: ~p", [Pid]),
-			io:format("Received a play_request message~n"),
+			printnameln("Pid for sender should be: ~p", [Pid]),
+			printnameln("Received a play_request message"),
 			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut);
 		Message ->
-			io:format("Received malformed message: ~p~n", [Message]),
+			printnameln("Received malformed message: ~p", [Message]),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut)
 	end.
 
@@ -112,23 +128,23 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 		true -> % get expected value of keeping each permutation of die
 			[KeepScore, KeepMove] = bestMove(Dice, Scorecard),
 			KeepAllDice = [true, true, true, true, true],
-			% io:format("KeepScore: ~p, KeepMove: ~p", [KeepScore, KeepMove]),
+			% printnameln("KeepScore: ~p, KeepMove: ~p", [KeepScore, KeepMove]),
 			AllDiceChanges = fixFlatten(lists:flatten(generateDiceChanges(5, [])), []), % gets 2^5 lists of all dice keep/change
-			% io:format("AllDiceChanges: ~p", [AllDiceChanges]),
+			% printnameln("AllDiceChanges: ~p", [AllDiceChanges]),
 			% gets the expected score for all possible dice change configurations
 			ExpectedScores = lists:map(fun(X) -> getExpectedScore(X, Dice, Scorecard) end, AllDiceChanges),
-			% io:format("ChangesScores are: ~p", [ExpectedScores]),
+			% printnameln("ChangesScores are: ~p", [ExpectedScores]),
 			MaxExpectedScore = lists:max(ExpectedScores),
 			if
 				MaxExpectedScore > KeepScore -> % then we use that change
 					Index = indexOf(MaxExpectedScore, ExpectedScores),
 					ChangesToMake = lists:nth(Index, AllDiceChanges),
-					io:format("MaxExpectedScore is: ~p", [MaxExpectedScore]),
-					io:format("KeepScore is: ~p", [KeepScore]),
-					io:format("Changes in die to make are: ~p", [ChangesToMake]), % KeepMove doesn't actually matter here
+					printnameln("MaxExpectedScore is: ~p", [MaxExpectedScore]),
+					printnameln("KeepScore is: ~p", [KeepScore]),
+					printnameln("Changes in die to make are: ~p", [ChangesToMake]), % KeepMove doesn't actually matter here
 					Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, ChangesToMake, KeepMove}};
 				true ->
-					io:format("Best move is: ~p", [KeepMove]), 
+					printnameln("Best move is: ~p", [KeepMove]), 
 					Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
 			end
 	end.
@@ -137,9 +153,9 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 % which is the average of all possible configurations that can result from this.
 getExpectedScore(DiceChanges, Dice, Scorecard) ->
 	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice rolls
-	% io:format("PossibleDieRolls are: ~p~n", [PossibleDieRolls]),
+	% printnameln("PossibleDieRolls are: ~p", [PossibleDieRolls]),
 	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls),
-	% io:format("ListDieScores is: ~p~n", [ListDieScores]),
+	% printnameln("ListDieScores is: ~p", [ListDieScores]),
 	lists:sum(ListDieScores) / length(ListDieScores).
 
 % Gets a flattened list of dice or changes to make,
@@ -229,7 +245,7 @@ bestMove(Dice, Scorecard) ->
 			AdjustedMaxMove = MaxMove
 	end,
 
-	% io:format("MaxScore is: ~p, MaxMove is: ~p~n", [MaxScore, AdjustedMaxMove]),
+	% printnameln("MaxScore is: ~p, MaxMove is: ~p", [MaxScore, AdjustedMaxMove]),
 	[MaxScore, AdjustedMaxMove].
 
 % Given the dice and scorecard index value and number on the upper board (i.e. ones, twos...sixes)
@@ -377,3 +393,15 @@ indexOf(Item, List) -> indexOf(Item, List, 1).
 indexOf(_, [], _)  -> not_found;
 indexOf(Item, [Item|_], Index) -> Index;
 indexOf(Item, [_|Tl], Index) -> indexOf(Item, Tl, Index+1).
+
+%% ====================================================================
+%%                       Pretty Print Functions
+%% ====================================================================
+getName() ->
+  ?GLOBALNAME ++ io_lib:format("~p", [self()]).
+
+printnameln(ToPrint) ->
+  println(io_lib:format("~s > ", [getName()]) ++ ToPrint).
+
+printnameln(ToPrint, Options) ->
+  println(io_lib:format("~s > ", [getName()]) ++ ToPrint, Options).

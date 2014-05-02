@@ -11,6 +11,7 @@
 -import(tournament_manager, [tournament_main/1]).
 -import(refereee, [referee_main/1]).
 -import(player, [player_main/1]).
+-import(shuffle, [shuffle/1]).
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
@@ -69,9 +70,10 @@ listen(TournamentManagerTids, UserTables) ->
         printnameln("request_tournament message received from ~p with " ++
             "num-players = ~p, games-per-match = ~p.",
             [Pid, NumPlayers, GamesPerMatch]),
-        % Players = [?TEMPSRING, ?TEMPSRING],
-        Players = [],
-        OptionalData = [],
+        LoggedInPlayerList = [X || X <- UserTables, element(5, X) == true],
+        % Cut down to only NumPlayers
+        Players = lists:sublist(shuffle(LoggedInPlayerList), NumPlayers),
+        _OptionalData = [],
         printnameln("Spawning a tournament_manager process..."),
         Nodename = string:concat("TournamentManager", integer_to_list(length(TournamentManagerTids) + 1)),
         printnameln("Nodename = ~p", [Nodename]),
@@ -153,9 +155,12 @@ listen(TournamentManagerTids, UserTables) ->
             "username = ~p, password = ~p.",
             [Pid, Username, Password]),
         LoginTicket = make_ref(),
+        NewUserTables = UserTables ++ [{Pid, Username, Password, LoginTicket, true}],
         Pid ! {logged_in, self(), Username, {LoginTicket}},
         printnameln("logged_in message sent to ~p with " ++
-            "login-ticket = ~p.", [Pid, LoginTicket]);
+            "login-ticket = ~p.", [Pid, LoginTicket]),
+        printnameln(""),
+        listen(TournamentManagerTids, NewUserTables);
 
     % logout - data is a
     %    { login-ticket };
@@ -304,7 +309,7 @@ print(ToPrint, Options) ->
 
 % pretty_print_list_of_nums/1
 % The parameter is a list L. If L = [1, 2, 3], it returns "[1, 2, 3]".
-pretty_print_list_of_nums(L) ->
-    StringList = lists:map(fun(Num) -> integer_to_list(Num) end, L),
-    "[" ++ string:join(StringList, ", ") ++ "]".
+% pretty_print_list_of_nums(L) ->
+%     StringList = lists:map(fun(Num) -> integer_to_list(Num) end, L),
+%     "[" ++ string:join(StringList, ", ") ++ "]".
 
