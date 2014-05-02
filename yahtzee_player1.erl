@@ -20,6 +20,7 @@
 -define(CHANCE, 13).
 
 main(Params) ->
+	io:format("In main"),
 	%set up network connections
 	_ = os:cmd("epmd -daemon"),
 	Reg_name = hd(Params),
@@ -27,13 +28,15 @@ main(Params) ->
 	Password = hd(tl(tl(Params))),
 	SysManagers = tl(tl(tl(Params))), % will be a list of them
 
+	SystManagersAtoms = lists:map(fun(X) -> list_to_atom(X) end, SysManagers),
+	io:format("before netstart"),
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
 	register(player, self()), % Useful for testing to send message by node name
 
 	% register with all system managers
-	io:format("Just before global send SysManagers: ~p~n", [SysManagers]),
-	lists:map(fun(X) -> net_kernel:connect_node(X) end, SysManagers),
-	lists:map(fun(X) -> {yahtzee_manager, X} ! {login, self(), Username, {Username, Password}} end, SysManagers),
+	io:format("Just before global send SysManagers: ~p~n", [SystManagersAtoms]),
+	lists:map(fun(X) -> net_kernel:connect_node(X) end, SystManagersAtoms),
+	lists:map(fun(X) -> {yahtzee_manager, X} ! {login, self(), Username, {Username, Password}} end, SystManagersAtoms),
 
 	io:format("My PID is: ~p", [self()]),
 
@@ -87,6 +90,7 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, _}} ->
+			io:format("Pid for sender should be: ~p", [Pid]),
 			io:format("Received a play_request message~n"),
 			playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard),
 			handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut);

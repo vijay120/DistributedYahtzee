@@ -149,8 +149,8 @@ handle_roll(	Tid,
 			ReplacedScoreCardB = checkIfYahtzeeBonusApplicable(DieToB, PlayerBScoreCard),
 
 			%Step 2: Send the message!
-			{player, enuge@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-			{player, enuge@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+			{player, list_to_atom("vijay@wl-194-96")} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
+			{player, list_to_atom("vijay120@wl-194-96")}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
 
 			%Recieve for player A only
 			receive
