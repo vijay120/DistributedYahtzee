@@ -44,6 +44,8 @@ referee_main(Params) ->
 	_ = os:cmd("epmd -daemon"),
 	Reg_name = hd(Params),
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
+	User_table = hd(tl(Params)),
+	io:format(lists:nth(1, User_table)),
 	io:format("My node is ~p", [node()]),
 	io:format("My pid is ~p", [self()]),
 	register(referee, self()),
@@ -149,8 +151,8 @@ handle_roll(	Tid,
 			ReplacedScoreCardB = checkIfYahtzeeBonusApplicable(DieToB, PlayerBScoreCard),
 
 			%Step 2: Send the message!
-			{player, list_to_atom("vijay@wl-194-96")} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-			{player, list_to_atom("vijay120@wl-194-96")}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+			{player, enuge@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
+			{player, enuge@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
 
 			%Recieve for player A only
 			receive
