@@ -39,11 +39,11 @@ tournament_main(Params) ->
   % The only parameter is the name of the node to register. This
   % should be a lowercase ASCII string with no periods or @ signs.
   ExternalControllerPid = hd(Params),        % <eid>
-  YahtzeeManagerPid = hd(tl(Params)),        % <yid>
+  YahtzeeManagerPid =     hd(tl(Params)),        % <yid>
   NodeName = list_to_atom(hd(tl(tl(Params)))),
-  NumPlayers = hd(tl(tl(tl(Params)))),
-  GamesPerMatch = hd(tl(tl(tl(tl(Params))))),
-  Players = tl(tl(tl(tl(tl(Params))))),
+  NumPlayers =            hd(tl(tl(tl(Params)))),
+  GamesPerMatch =         hd(tl(tl(tl(tl(Params))))),
+  Players =               tl(tl(tl(tl(tl(Params))))),
   Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
@@ -53,11 +53,11 @@ tournament_main(Params) ->
   RefereeGids = [],
   OptionalData = [],
   Tid = self(),
-  HardCodedTid = 90,
-  NewTid = spawn(referee, referee_main, [["referee", Players, HardCodedTid]]),
+  UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
+  spawn(referee, referee_main, [["referee", Players, Tid]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
-  wait_for_all_players(ExternalControllerPid, Usernames, Usernames, OptionalData),
-  play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
+  wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
+  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
 
 %% ====================================================================
@@ -78,13 +78,16 @@ ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players) ->
     end,
     PidsUsernames).
 
-% This is the case when all players reply.
+% This is the case when all players replied.
 wait_for_all_players(ExternalControllerPid, [], Usernames, OptionalData) ->
     PidForReply = self(),
     Tid = self(),
+    printnameln("Get responses from all users! Sending the tournament_started message to ~p " ++
+      " with data = ~p",
+      [PidForReply, {Tid, Usernames, OptionalData}]),
     ExternalControllerPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
-wait_for_all_players(ExternalControllerPid, WaitingUsernames, Usernames, OptionalData) ->
-  OnePlayer = 
+wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, OptionalData) ->
+  {NewWaitingUserTickets, NewUserNames} = 
     receive
       % accept_tournament - data is a tuple
       %     { tid, login-ticket };
@@ -99,11 +102,10 @@ wait_for_all_players(ExternalControllerPid, WaitingUsernames, Usernames, Optiona
       %     > The pid-for-reply in this message determines where
       %         play-request messages for this player in the specified
       %         tournament are sent.
-      {accept_tournament, Pid, {Tid, LoginTicket}} ->
+      {accept_tournament, Pid, _Username, {Tid, LoginTicket}} ->
           printnameln("accept_tournament message received from ~p with " ++
               "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]),
-          % TODO: Convert a login ticket to username.
-          LoginTicket;
+          {WaitingUserTickets -- [LoginTicket], Usernames};
 
       % reject_tournament - data is a tuple
       %     { tid, login-ticket };
@@ -119,27 +121,40 @@ wait_for_all_players(ExternalControllerPid, WaitingUsernames, Usernames, Optiona
       %         to a start_tournament message, it is assumed to have rejected
       %         the tournament; thus, tournament managers must use timeouts
       %         when setting up tournaments.
-      {reject_tournament, Pid, {Tid, LoginTicket}} ->
+      {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
           printnameln("reject_tournament message received from ~p with " ++
               "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]),
-          LoginTicket;
+          {WaitingUserTickets -- [LoginTicket], Usernames -- [Username]};
       %% ==============================================================
       %%                             Else
       %% ==============================================================
       {MessageType, Pid, Data} ->
           printnameln("Malformed ~p message from ~p with data = ~p",
               [MessageType, Pid, Data]),
-          Pid ! {error, "Malformed message."}
+          Pid ! {error, "Malformed message."};
+
+      InvalidMessage ->
+        printnameln("Invalid Message: ~p", [InvalidMessage])
     end,
-  wait_for_all_players(ExternalControllerPid, WaitingUsernames -- [OnePlayer], Usernames, OptionalData).
+  wait_for_all_players(ExternalControllerPid, NewWaitingUserTickets, NewUserNames, OptionalData).
 
 
-play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
-  % TODO: Keep track when it finishes
-  play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData);
+play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
+  receive
+      {report_game_results, Pid, {UserRecords, Winner}} ->
+        YahtzeeManagerPid ! {report_game_results, Pid, {UserRecords, Winner}};
 
-play(NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData) ->
-  play(NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData).
+      BadMessage ->
+        printnameln("Bad message: ~p", [BadMessage])
+  end,
+  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData);
+
+play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData) ->
+  receive
+      BadMessage ->
+        printnameln("Bad message: ~p", [BadMessage])
+  end,
+  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData).
 
 %% ====================================================================
 %%                       Pretty Print Functions

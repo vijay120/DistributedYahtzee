@@ -206,7 +206,8 @@ listen(TournamentStatuses, UserTables) ->
         % If yes, change is_login to true. Else just add it
         % to user table with fresh stats.
         case lists:keyfind(Username, ?USERNAME, UserTables) of
-          false -> % add to user table with fresh stats
+          false ->
+            % add to user table with fresh stats
             LoginTicket = make_ref(),
             NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, 0,0,0,0},
             NewUserTables = [NewRecord | UserTables],
@@ -217,19 +218,21 @@ listen(TournamentStatuses, UserTables) ->
 
           {_, Nodename, Username, Password, LoginTicket, _, MatchWins, MatchLosses,
           TournamentsPlayed, TournamentWins} ->
+            % re-login
             NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, MatchWins,
                          MatchLosses, TournamentsPlayed, TournamentWins},
-            % TODO: Do lists:keyreplace instead of just insert
-            NewUserTables = [NewRecord | UserTables],
+            % TODO: Do lists:keyreplace instead of just insert | To Eoin, I fixed this. Can you double check? - Tum
+            NewUserTables = lists:keyreplace(Username, ?USERNAME, UserTables, NewRecord),
             Pid ! {logged_in, self(), Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]),
             printnameln("");
 
-          {_, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
+          {UserPid, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
             LoginTicket = make_ref(),
             NewUserTables = UserTables,
-            io:format("Password does not match!") % TODO: What do we do now??
+            printnameln("Password does not match!"),
+            exit(UserPid, {badmatch, "Incorrect password"}) % TODO: What do we do now??
         end,
 
         listen(TournamentStatuses, NewUserTables);
@@ -242,7 +245,7 @@ listen(TournamentStatuses, UserTables) ->
     %     This logs the player out (making them ineligible for
     %       playing in tournaments until they log in again).
 
-    {logout, Pid, {LoginTicket}} ->
+    {logout, Pid, Username, {LoginTicket}} ->
         % replace LoginStatus with false, update our UserTables.
         printnameln("logout message received from ~p with " ++
             "login-ticket = ~p.", [Pid, LoginTicket]),
@@ -274,7 +277,7 @@ listen(TournamentStatuses, UserTables) ->
     {accept_tournament, Pid, Username, {Tid, LoginTicket}} ->
         printnameln("accept_tournament message received from ~p with " ++
             "tid = ~p, login-ticket = ~p. Forwarding to TM...", [Pid, Tid, LoginTicket]),
-        Tid ! {accept_tournament, Pid, {Tid, LoginTicket}};
+        Tid ! {accept_tournament, Pid, Username, {Tid, LoginTicket}};
 
     % reject_tournament - data is a tuple
     %     { tid, login-ticket };
@@ -293,7 +296,7 @@ listen(TournamentStatuses, UserTables) ->
     {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
         printnameln("reject_tournament message received from ~p with " ++
             "tid = ~p, login-ticket = ~p. Forwarding to TM...", [Pid, Tid, LoginTicket]),
-        Tid ! {reject_tournament, Pid, {Tid, LoginTicket}};
+        Tid ! {reject_tournament, Pid, Username, {Tid, LoginTicket}};
 
     % play_action - data is a tuple
     %     { ref, tid, gid, roll-number, dice-to-keep, scorecard-line }.
@@ -332,14 +335,24 @@ listen(TournamentStatuses, UserTables) ->
     % Winner: Username (the winner of the tournament)
     {report_game_results, Pid, {UserRecords, Winner}} ->
         printnameln("results message received from ~p with " ++
-                " UserRecords = ~p, Winner = ~p"),
+          " UserRecords = ~p, Winner = ~p",
+          [Pid, UserRecords, Winner]
+        ),
         % Update usertables with new stats from all players in tournament.
         UpdatedUserTables = updateUserTables(UserRecords, UserTables),
 
-        {WinnerPid, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
-        WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon} = lists:keyfind(Winner, ?USERNAME, UpdatedUserTables), % update winner with tourney win separately
-        NewWinnerRecord = {WinnerPid, Winner, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
-        WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon+1},
+        % update winner with tourney win separately
+        {WinnerPid, WinnerNodename, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin,
+          WinnerMatchWins, WinnerMatchLosses, WinnerTourneysPlayed,
+          WinnerTourneysWon} = lists:keyfind(Winner, ?USERNAME, UpdatedUserTables),
+
+        NewWinnerRecord = {
+          WinnerPid, WinnerNodename, Winner, WinnerPassword,
+          WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+          WinnerMatchLosses, WinnerTourneysPlayed,
+          WinnerTourneysWon + 1
+        },
+
         NewUserTables = lists:keyreplace(Winner, ?USERNAME, UpdatedUserTables, NewWinnerRecord),
         listen(TournamentStatuses, NewUserTables);
 
@@ -365,11 +378,21 @@ updateUserTables(UserRecords, UserTables) ->
       UserTables;
     true ->
       {Username, MatchWins, MatchLosses} = hd(UserRecords),
-      {Pid, _, Password, LoginTicket, IsLogin, OldMatchWins, % get existing record for player
-        OldMatchLosses, TourneysPlayed, TourneysWon} = lists:keyfind(Username, ?USERNAME, UserTables),
-      NewRecord = {Pid, Username, Password, LoginTicket, IsLogin, OldMatchWins+MatchWins,
-        OldMatchLosses+MatchLosses, TourneysPlayed+1, TourneysWon}, % update with new stats
-      NewUserTables = list:keyreplace(Username, 2, UserTables, NewRecord),
+
+      % get existing record for player
+      {Pid, Nodename, _, Password, LoginTicket, IsLogin,
+        OldMatchWins, OldMatchLosses, TourneysPlayed, TourneysWon}
+        = lists:keyfind(Username, ?USERNAME, UserTables),
+
+      NewRecord = {
+        Pid, Nodename, Username, Password, LoginTicket, IsLogin,
+        OldMatchWins + MatchWins,
+        OldMatchLosses + MatchLosses,
+        TourneysPlayed + 1,
+        TourneysWon
+      }, % update with new stats
+
+      NewUserTables = lists:keyreplace(Username, ?USERNAME, UserTables, NewRecord),
       updateUserTables(tl(UserRecords), NewUserTables)
   end.
 

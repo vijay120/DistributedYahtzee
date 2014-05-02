@@ -5,8 +5,8 @@ erlc referee.erl
 erlc yahtzee_player1.erl
 erlc shuffle.erl
 set +o verbose
-echo "==== SLEEP FOR 3 SECONDS ^-- see above compile results to see if there are any errors ================"
-sleep 3
+# echo "==== SLEEP FOR 3 SECONDS ^-- see above compile results to see if there are any errors ================"
+# sleep 3
 nodename=$1
 echo "========================================================================="
 full_node_name=$nodename@$(hostname -s)

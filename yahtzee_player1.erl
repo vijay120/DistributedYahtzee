@@ -37,10 +37,10 @@
 main(Params) ->
 	printnameln("In main"),
 	%set up network connections
-	_ = os:cmd("epmd -daemon"),
-	RegName = hd(Params),
-	Username = hd(tl(Params)),
-	Password = hd(tl(tl(Params))),
+	os:cmd("epmd -daemon"),
+	RegName =     hd(Params),
+	Username =    hd(tl(Params)),
+	Password =    hd(tl(tl(Params))),
 	SysManagers = tl(tl(tl(Params))), % will be a list of them
 
 	SystManagersAtoms = lists:map(fun(X) -> list_to_atom(X) end, SysManagers),
@@ -73,8 +73,17 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 		% Logs us out if we want to and are in no active tournaments.
 	if  % Currently this will never run as we never actually want to
 	    % programmatically log out.
-		IsLoggingOut and ActiveTids == [] ->
-			lists:map(fun({Pid, LoginTicket}) -> Pid ! {logout, self(), Username, {LoginTicket}} end, LoginTickets);
+		IsLoggingOut and (ActiveTids == []) ->
+			lists:map(
+				fun({SystemPid, LoginTicket}) ->
+					printnameln("Logging out from SystemPid ~p", [SystemPid]),
+					SystemPid ! {logout, self(), Username, {LoginTicket}},
+					printnameln("Logged out from SystemPid ~p with LoginTicket ~p!",
+						[SystemPid, LoginTicket])
+				end,
+				LoginTickets
+			),
+			halt(0);
 		true ->
 			true
 	end,
@@ -82,11 +91,8 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 	receive
 		{please_logout, Pid, Username, {}} ->
 			printnameln("Received a please_logout message"),
-			lists:map(
-				fun({SystemPid, LoginTicket}) ->
-					SystemPid ! {logout, self(), Username, {LoginTicket}} end,
-				LoginTickets),
-			Pid ! {logged_out, self(), Username, {}};
+			Pid ! {logged_out, self(), Username, {}},
+			handleMessages(Username, LoginTickets, ActiveTids, true);
 
 		{logged_in, Pid, Username, {NewLoginTicket}} ->
 			printnameln("Received a logged_in message"),
@@ -115,10 +121,12 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 					printnameln("Bad code.")
 			end,
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
+
 		{end_tournament, _, Username, {Tid}} ->
 			printnameln("Received an end_tournament message"),
 			NewActiveTids = lists:delete(Tid, ActiveTids),
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
+
 		{play_request, Pid, Username, 
 			{Ref, Tid, Gid, RollNumber, Dice, Scorecard, _}} ->
 			printnameln("Pid for sender should be: ~p", [Pid]),
