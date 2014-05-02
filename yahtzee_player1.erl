@@ -91,22 +91,27 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 			printnameln("Received a logged_in message"),
 			handleMessages(Username, [{Pid, NewLoginTicket} | LoginTickets], ActiveTids, IsLoggingOut);
 
-		{start_tournament, Pid, Username, {Tid}} ->
-			printnameln("Received a start_tournament message"),
-			{_, ProperLoginTicket} = lists:keyfind(Pid, 1, LoginTickets),
-			if
-				ProperLoginTicket == false ->
+		{start_tournament, Yid, Username, {Tid}} ->
+			printnameln("Received a start_tournament message with Yid = ~p, Tid = ~p", [Yid, Tid]),
+			Result = lists:keyfind(Yid, 1, LoginTickets),
+			NewActiveTids = case Result of
+				false ->
 					printnameln("No PID matches this login ticket."),
-					NewActiveTids = ActiveTids;
-				true ->
-					if
-						IsLoggingOut ->
-							NewActiveTids = ActiveTids,
-							Pid ! {reject_tournament, self(), Username, {Tid, ProperLoginTicket}};
+					ActiveTids;
+				{_Key, ProperLoginTicket} ->
+					printnameln("PID matches the login ticket!"),
+					case IsLoggingOut of
 						true ->
-							NewActiveTids = [Tid|ActiveTids], 
-							Pid ! {accept_tournament, self(), Username, {Tid, ProperLoginTicket}}
-					end
+							printnameln("Is logging out! Sending reject_tournament..."),
+							Yid ! {reject_tournament, self(), Username, {Tid, ProperLoginTicket}},
+							ActiveTids;
+						false ->
+							printnameln("Is not logging out! Sending accept_tournament..."),
+							Yid ! {accept_tournament, self(), Username, {Tid, ProperLoginTicket}},
+							[Tid|ActiveTids]
+					end;
+				_ ->
+					printnameln("Bad code.")
 			end,
 			handleMessages(Username, LoginTickets, NewActiveTids, IsLoggingOut);
 		{end_tournament, _, Username, {Tid}} ->

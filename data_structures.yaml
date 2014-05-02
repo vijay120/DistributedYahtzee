@@ -59,8 +59,16 @@ messages:
 		- tournament_status: {tournament_status, Tid, Status, Winner, OptionalData }
 		- user_status: {Username, MatchWins, MatchLosses, TournamentsPlayed, TournamentWins }
 
+
 	- yahtzee_manager -> tournament_manager
-		- main <pid> nodename num-players games-per-match [username]
+		- tournament_main(<yid>, Nodename, NumPlayers, GamesPerMatch, Players)
+
+
+	- tournament_manager -> referee
+		- referee_main(<tid>, UserTableOfTwo)
+	- referee -> referee OR tournament_manager -> yahtzee_manager
+		- report_game_results: {report_game_results, Pid, {[{Username, MatchWins, MatchLosses}], Winner}}
+
 
 	- yahtzee_manager -> player:
 		- logged_in: {logged_in, Pid, Username, {LoginTicket}}
@@ -71,6 +79,7 @@ messages:
 		- reject_tournament: {reject_tournament, Pid, {Tid, LoginTicket}}
 		- play_action: {play_action, Pid, {Ref, Tid, Gid, RollNumber, DiceToKeep, ScorecardLine}}
 
+
 	- tournament_manager -> player:
 		- start_tournament: {start_tournament, Pid, {Tid}}
 			# This message must be sent to a player for a tournament x,
@@ -80,5 +89,3 @@ messages:
 
 	- referee -> player:
 		- play_request: {play_request, Pid, Username, {Red, Tid, Gid, RollNumber, Dice, Scorecard, OpponentScorecard}}
-	- referee -> referee OR tournament_manager -> yahtzee_manager
-		- report_game_results: {report_game_results, Pid, {[{Username, MatchWins, MatchLosses}], Winner}}
