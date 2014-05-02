@@ -24,14 +24,15 @@
 
 % For UserTable indexing...
 -define(PID, 1).
--define(USERNAME, 2).
--define(PASSWORD, 3).
--define(LOGIN_TICKET, 4).
--define(IS_LOGIN, 5).
--define(MATCH_WINS, 6).
--define(MATCH_LOSSES, 7).
--define(TOURNAMENTS_PLAYED, 8).
--define(TOURNAMENTS_WIN, 9).
+-define(NODE, 2).
+-define(USERNAME, 3).
+-define(PASSWORD, 4).
+-define(LOGIN_TICKET, 5).
+-define(IS_LOGIN, 6).
+-define(MATCH_WINS, 7).
+-define(MATCH_LOSSES, 8).
+-define(TOURNAMENTS_PLAYED, 9).
+-define(TOURNAMENTS_WIN, 10).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
@@ -77,10 +78,10 @@ listen(TournamentManagerTids, UserTables) ->
     %       games-per-match would be 5). A request_tournament message
     %       with an invalid games-per-match value (such as an even
     %       number, or a negative number) is ignored.
-    {request_tournament, Pid, {NumPlayers, GamesPerMatch}} ->
+    {request_tournament, ExternalControllerPid, {NumPlayers, GamesPerMatch}} ->
         printnameln("request_tournament message received from ~p with " ++
             "num-players = ~p, games-per-match = ~p.",
-            [Pid, NumPlayers, GamesPerMatch]),
+            [ExternalControllerPid, NumPlayers, GamesPerMatch]),
         LoggedInPlayerList = [X || X <- UserTables, element(?IS_LOGIN, X) == true],
         printnameln("Logged-in players are ~p", [LoggedInPlayerList]),
         % Cut down to only NumPlayers
@@ -96,7 +97,7 @@ listen(TournamentManagerTids, UserTables) ->
         Tid = spawn(tournament_manager, tournament_main,
           [
             [
-              Pid,
+              ExternalControllerPid,
               self(),
               Nodename, 
               NumPlayers,
@@ -160,7 +161,7 @@ listen(TournamentManagerTids, UserTables) ->
     %         not previously registered with the system, it is registered
     %         when the first login is received for that username.
     %         There is no mechanism for changing passwords.
-    {login, Pid, _Username, {Username, Password}} ->
+    {login, Pid, Nodename, {Username, Password}} ->
         % The following message types can be sent from the rest of the system to
         % a player:
         %
@@ -177,7 +178,7 @@ listen(TournamentManagerTids, UserTables) ->
         TournamentWins = [],
 
         NewUserTables = UserTables ++
-          [{Pid, Username, Password, LoginTicket, true, MatchWins,
+          [{Pid, Nodename, Username, Password, LoginTicket, true, MatchWins,
           MatchLosses, TournamentsPlayed, TournamentWins}],
 
         Pid ! {logged_in, self(), Username, {LoginTicket}},
@@ -275,7 +276,9 @@ listen(TournamentManagerTids, UserTables) ->
     {MessageType, Pid, Data} ->
         printnameln("Malformed ~p message from ~p with data = ~p",
             [MessageType, Pid, Data]),
-        Pid ! {error, "Malformed message."}
+        Pid ! {error, "Malformed message."};
+    InvalidMessage ->
+        printnameln("Invalid Message: ~p", [InvalidMessage])
   end,
   listen(TournamentManagerTids, UserTables).
 
