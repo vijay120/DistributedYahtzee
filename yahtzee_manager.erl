@@ -9,7 +9,7 @@
 % {ash:1} erl -noshell -run yahtzee_manager main system_manager_name
 
 -import(tournament_manager, [tournament_main/1]).
--import(refereee, [referee_main/1]).
+-import(referee, [referee_main/1]).
 -import(player, [player_main/1]).
 -import(shuffle, [shuffle/1]).
 %% ====================================================================

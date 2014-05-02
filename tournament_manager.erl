@@ -8,6 +8,7 @@
 % args: tournament_main <eid> <tid> nodename num-players games-per-match [username]
 
 -import(yahtzee_manager, [println/1, println/2]).
+-import(referee, [referee_main/1]).
 
 %% ====================================================================
 %%                             Public API
@@ -52,6 +53,8 @@ tournament_main(Params) ->
   RefereeGids = [],
   OptionalData = [],
   Tid = self(),
+  HardCodedTid = 90,
+  NewTid = spawn(referee, referee_main, [["referee", Players, HardCodedTid]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
   wait_for_all_players(ExternalControllerPid, Usernames, Usernames, OptionalData),
   play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
@@ -134,6 +137,7 @@ wait_for_all_players(ExternalControllerPid, WaitingUsernames, Usernames, Optiona
 play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
   % TODO: Keep track when it finishes
   play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData);
+
 play(NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData) ->
   play(NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData).
 
