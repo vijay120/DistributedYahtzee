@@ -8,7 +8,8 @@ set +o verbose
 echo "==== SLEEP FOR 3 SECONDS ^-- see above compile results to see if there are any errors ================"
 sleep 3
 echo "========================================================================="
-full_node_name=node_name@$(hostname -s)
+nodename=$1
+full_node_name=$nodename@$(hostname -s)
 echo "full_node_name = "$full_node_name
 echo "========================================================================="
 set -o verbose

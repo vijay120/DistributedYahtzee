@@ -33,6 +33,11 @@
 -define(MATCH_LOSSES, 8).
 -define(TOURNAMENTS_PLAYED, 9).
 -define(TOURNAMENTS_WIN, 10).
+
+% For TournamentStatuses indexing...
+-define(TID, 1).
+-define(STATUS, 2).
+-define(WINNER, 3).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
@@ -55,13 +60,13 @@ main(Params) ->
   register(yahtzee_manager, self()),
   printnameln("Registered with the process name = ~p, nodename = ~p, pid = ~p",
     [NodeName, node(), self()]),
-  TournamentManagerTids = [],
+  TournamentStatuses = [],
   UserTables = [],
-  listen(TournamentManagerTids, UserTables).
+  listen(TournamentStatuses, UserTables).
 
 
-listen(TournamentManagerTids, UserTables) ->
-  printnameln("TournamentManagerTids = ~p", [TournamentManagerTids]),
+listen(TournamentStatuses, UserTables) ->
+  printnameln("TournamentStatuses = ~p", [TournamentStatuses]),
   printnameln("UserTables = ~p", [UserTables]),
   receive
     %% =============================================================
@@ -89,9 +94,10 @@ listen(TournamentManagerTids, UserTables) ->
         printnameln("Out of those, because NumPlayers = ~p, we select ~p",
           [NumPlayers, Players]),
         _OptionalData = [],
+        
         printnameln("Spawning a tournament_manager process..."),
         Nodename = string:concat("TournamentManager",
-          integer_to_list(length(TournamentManagerTids) + 1)),
+          integer_to_list(length(TournamentStatuses) + 1)),
         printnameln("Nodename = ~p", [Nodename]),
 
         Tid = spawn(tournament_manager, tournament_main,
@@ -109,33 +115,56 @@ listen(TournamentManagerTids, UserTables) ->
         ),
         printnameln("tournament process spawned! Its TID is ~p", [Tid]),
 
-        NewTournamentManagerTids = TournamentManagerTids ++ [Tid],
-        listen(NewTournamentManagerTids, UserTables);
+        NewTournamentStatuses = TournamentStatuses ++ [{Tid, in_progress, undefined}], % if in_progress, ignore winner entry
+        listen(NewTournamentStatuses, UserTables);
         
     % tournament-info - data is a tournament ID 
     {tournament_info, Pid, {TournamentId}} ->
         printnameln("tournament_info message received from ~p with " ++
             "tournament ID = ~p.", [Pid, TournamentId]),
-        Status = ?TEMP,
-        Winner = ?TEMP,
-        OptionalData = [],
-        Pid ! {tournament_status, Pid,
-            {TournamentId, Status, Winner, OptionalData}},
-        printnameln("tournament_status message sent to ~p with ", [Pid]),
-        printnameln("  tid = ~p", [TournamentId]),
-        printnameln("  status = ~p", [Status]),
-        printnameln("  winner = ~p", [Winner]),
-        printnameln("  optional-data = ~p", [OptionalData]),
-        printnameln("");
+        printnameln("TournamentStatuses: ~p", [TournamentStatuses]),
+
+        {Status, Winner} = 
+          case lists:keyfind(TournamentId, ?TID, TournamentStatuses) of
+            false ->
+              printnameln("Tournament does not exist."),
+              {undefined, undefined};
+
+            {_, CaseStatus, CaseWinner} -> 
+              {CaseStatus, CaseWinner};
+
+            Badcode ->
+              printnameln("Tuple of inappropriate size: ~p", [Badcode]),
+              {undefined, undefined}
+          end,
+
+          OptionalData = [],
+
+          printnameln("tournament_status message sent to ~p with ", [Pid]),
+          printnameln("  tid = ~p", [TournamentId]),
+          printnameln("  status = ~p", [Status]),
+          printnameln("  winner = ~p", [Winner]),
+          printnameln("  optional-data = ~p", [OptionalData]),
+          printnameln(""),
+
+          Pid ! {tournament_status, Pid,
+                  {TournamentId, Status, Winner, OptionalData}};
 
     % user-info - data is a username
     {user_info, Pid, {Username}} ->
         printnameln("user_info message received from ~p with " ++
             "username = ~p.", [Pid, Username]),
-        MatchWins = [?TEMP, ?TEMP],
-        MatchLosses = [?TEMP, ?TEMP],
-        TournamentsPlayed = [?TEMP, ?TEMP],
-        TournamentWins = [?TEMP, ?TEMP],
+
+        {MatchWins, MatchLosses, TournamentsPlayed, TournamentWins} = 
+          case lists:keyfind(Username, ?USERNAME, UserTables) of
+            false ->
+              printnameln("Username does not match any existing usernames"), 
+              {undefined,undefined,undefined,undefined};
+            {_, _, _, _, _, _, CaseMatchWins,
+              CaseMatchLosses, CaseTournamentsPlayed, CaseTournamentWins} ->
+                {CaseMatchWins, CaseMatchLosses, CaseTournamentsPlayed, CaseTournamentWins}
+          end,
+
         Pid ! {user_status, Pid,
             {Username, MatchWins, MatchLosses,
             TournamentsPlayed, TournamentWins}},
@@ -168,24 +197,42 @@ listen(TournamentManagerTids, UserTables) ->
         %    > logged_in - data is a login-ticket, a ref that the player can use
         % to later log out in an orderly fashion. This message is sent by the
         % system to a player when the player logs in.
+
         printnameln("login message received from ~p with " ++
             "username = ~p, password = ~p.",
             [Pid, Username, Password]),
-        LoginTicket = make_ref(),
-        MatchWins = [],
-        MatchLosses = [],
-        TournamentsPlayed = [],
-        TournamentWins = [],
+        
+        % Check if the player is in the user tables; 
+        % If yes, change is_login to true. Else just add it
+        % to user table with fresh stats.
+        case lists:keyfind(Username, ?USERNAME, UserTables) of
+          false -> % add to user table with fresh stats
+            LoginTicket = make_ref(),
+            NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, 0,0,0,0},
+            NewUserTables = [NewRecord | UserTables],
+            Pid ! {logged_in, self(), Username, {LoginTicket}},
+            printnameln("logged_in message sent to ~p with " ++
+                "login-ticket = ~p.", [Pid, LoginTicket]),
+            printnameln("");
 
-        NewUserTables = UserTables ++
-          [{Pid, Nodename, Username, Password, LoginTicket, true, MatchWins,
-          MatchLosses, TournamentsPlayed, TournamentWins}],
+          {_, Nodename, Username, Password, LoginTicket, _, MatchWins, MatchLosses,
+          TournamentsPlayed, TournamentWins} ->
+            NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, MatchWins,
+                         MatchLosses, TournamentsPlayed, TournamentWins},
+            % TODO: Do lists:keyreplace instead of just insert
+            NewUserTables = [NewRecord | UserTables],
+            Pid ! {logged_in, self(), Username, {LoginTicket}},
+            printnameln("logged_in message sent to ~p with " ++
+                "login-ticket = ~p.", [Pid, LoginTicket]),
+            printnameln("");
 
-        Pid ! {logged_in, self(), Username, {LoginTicket}},
-        printnameln("logged_in message sent to ~p with " ++
-            "login-ticket = ~p.", [Pid, LoginTicket]),
-        printnameln(""),
-        listen(TournamentManagerTids, NewUserTables);
+          {_, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
+            LoginTicket = make_ref(),
+            NewUserTables = UserTables,
+            io:format("Password does not match!") % TODO: What do we do now??
+        end,
+
+        listen(TournamentStatuses, NewUserTables);
 
     % logout - data is a
     %    { login-ticket };
@@ -196,13 +243,21 @@ listen(TournamentManagerTids, UserTables) ->
     %       playing in tournaments until they log in again).
 
     {logout, Pid, {LoginTicket}} ->
-        ThePlayer = hd([X || X <- UserTables, element(?LOGIN_TICKET, X) == LoginTicket]),
-        ThePlayerUpdated = setelement(?IS_LOGIN, ThePlayer, false),
-        NewUserTables = (UserTables - [ThePlayer]) ++ ThePlayerUpdated,
+        % replace LoginStatus with false, update our UserTables.
         printnameln("logout message received from ~p with " ++
             "login-ticket = ~p.", [Pid, LoginTicket]),
-        listen(TournamentManagerTids, NewUserTables);
 
+        NewUserTables = case lists:keyfind(LoginTicket, ?LOGIN_TICKET, UserTables) of
+          false -> 
+            printnameln("LoginTicket does not match any existing players."),
+            UserTables;
+          Result -> 
+            ResultUpdated = setelement(?IS_LOGIN, Result, false),
+            lists:keyreplace(LoginTicket, ?LOGIN_TICKET, UserTables, ResultUpdated)
+        end,
+        
+        listen(TournamentStatuses, NewUserTables);
+          
     % accept_tournament - data is a tuple
     %     { tid, login-ticket };
     %
@@ -216,7 +271,7 @@ listen(TournamentManagerTids, UserTables) ->
     %     > The pid-for-reply in this message determines where
     %         play-request messages for this player in the specified
     %         tournament are sent.
-    {accept_tournament, Pid, {Tid, LoginTicket}} ->
+    {accept_tournament, Pid, Username, {Tid, LoginTicket}} ->
         printnameln("accept_tournament message received from ~p with " ++
             "tid = ~p, login-ticket = ~p. Forwarding to TM...", [Pid, Tid, LoginTicket]),
         Tid ! {accept_tournament, Pid, {Tid, LoginTicket}};
@@ -235,7 +290,7 @@ listen(TournamentManagerTids, UserTables) ->
     %         to a start_tournament message, it is assumed to have rejected
     %         the tournament; thus, tournament managers must use timeouts
     %         when setting up tournaments.
-    {reject_tournament, Pid, {Tid, LoginTicket}} ->
+    {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
         printnameln("reject_tournament message received from ~p with " ++
             "tid = ~p, login-ticket = ~p. Forwarding to TM...", [Pid, Tid, LoginTicket]),
         Tid ! {reject_tournament, Pid, {Tid, LoginTicket}};
@@ -269,6 +324,24 @@ listen(TournamentManagerTids, UserTables) ->
         printnameln("Forwarding request to a referee..."),
         Gid ! {play_action, Pid, {Ref, Tid, Gid, RollNumber, DiceToKeep, ScorecardLine}};
 
+    %% ==============================================================
+    %%              yahtzee_manager <-> tournament_manager
+    %% ==============================================================
+    % Some tournament ended and is giving us the results. 
+    % UserRecords: [{Username, MatchWins, MatchLosses}] (every player in tournament)
+    % Winner: Username (the winner of the tournament)
+    {report_game_results, Pid, {UserRecords, Winner}} ->
+        printnameln("results message received from ~p with " ++
+                " UserRecords = ~p, Winner = ~p"),
+        % Update usertables with new stats from all players in tournament.
+        UpdatedUserTables = updateUserTables(UserRecords, UserTables),
+
+        {WinnerPid, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+        WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon} = lists:keyfind(Winner, ?USERNAME, UpdatedUserTables), % update winner with tourney win separately
+        NewWinnerRecord = {WinnerPid, Winner, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+        WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon+1},
+        NewUserTables = lists:keyreplace(Winner, ?USERNAME, UpdatedUserTables, NewWinnerRecord),
+        listen(TournamentStatuses, NewUserTables);
 
     %% ==============================================================
     %%                             Else
@@ -280,7 +353,25 @@ listen(TournamentManagerTids, UserTables) ->
     InvalidMessage ->
         printnameln("Invalid Message: ~p", [InvalidMessage])
   end,
-  listen(TournamentManagerTids, UserTables).
+  listen(TournamentStatuses, UserTables).
+
+%% ====================================================================
+%%                           Utility Functions
+%% ====================================================================
+
+updateUserTables(UserRecords, UserTables) ->
+  if
+    UserRecords == [] ->
+      UserTables;
+    true ->
+      {Username, MatchWins, MatchLosses} = hd(UserRecords),
+      {Pid, _, Password, LoginTicket, IsLogin, OldMatchWins, % get existing record for player
+        OldMatchLosses, TourneysPlayed, TourneysWon} = lists:keyfind(Username, ?USERNAME, UserTables),
+      NewRecord = {Pid, Username, Password, LoginTicket, IsLogin, OldMatchWins+MatchWins,
+        OldMatchLosses+MatchLosses, TourneysPlayed+1, TourneysWon}, % update with new stats
+      NewUserTables = list:keyreplace(Username, 2, UserTables, NewRecord),
+      updateUserTables(tl(UserRecords), NewUserTables)
+  end.
 
 %% ====================================================================
 %%                       Pretty Print Functions

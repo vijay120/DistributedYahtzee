@@ -5,8 +5,8 @@ external_controller:
 		- user_info: {user_info, Pid, {Username}}
 
 yahtzee_manager (yid, nodename, nodename@host):
-	- TidList ([tid], list of tournament_manager)
-	- UserTable ([{Pid, Username, Password, LoginTicket, IsLogin,
+	- TournamentStatuses [{tid, status, winner}],
+	- UserTable ([{Pid, Nodename, Username, Password, LoginTicket, IsLogin,
 		MatchWins, MatchLosses, TournamentsPlayed, TournamentWins}])
 
 tournament_manager (tid):

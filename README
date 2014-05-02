@@ -12,7 +12,7 @@ Reflections:
 Testing:
 
 	bash test_yahtzee_manager.sh node_name
-	bash test_external_controller.sh
+	bash test_external_controller.sh node_name
 	bash test_yahtzee_player1.sh    vijay1 enugent1 hunter1 node_name@$(hostname -s)
 	bash test_yahtzee_player1.sh    vijay2 enugent2 hunter2 node_name@$(hostname -s)
 	bash test_external_controller.sh
