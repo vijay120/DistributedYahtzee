@@ -21,6 +21,17 @@
 %% ====================================================================
 -define(TEMP, 1).
 -define(TEMPSRING, "1").
+
+% For UserTable indexing...
+-define(PID, 1).
+-define(USERNAME, 2).
+-define(PASSWORD, 3).
+-define(LOGIN_TICKET, 4).
+-define(IS_LOGIN, 5).
+-define(MATCH_WINS, 6).
+-define(MATCH_LOSSES, 7).
+-define(TOURNAMENTS_PLAYED, 8).
+-define(TOURNAMENTS_WIN, 9).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
@@ -70,12 +81,13 @@ listen(TournamentManagerTids, UserTables) ->
         printnameln("request_tournament message received from ~p with " ++
             "num-players = ~p, games-per-match = ~p.",
             [Pid, NumPlayers, GamesPerMatch]),
-        LoggedInPlayerList = [X || X <- UserTables, element(5, X) == true],
+        LoggedInPlayerList = [X || X <- UserTables, element(?IS_LOGIN, X) == true],
         % Cut down to only NumPlayers
         Players = lists:sublist(shuffle(LoggedInPlayerList), NumPlayers),
         _OptionalData = [],
         printnameln("Spawning a tournament_manager process..."),
-        Nodename = string:concat("TournamentManager", integer_to_list(length(TournamentManagerTids) + 1)),
+        Nodename = string:concat("TournamentManager",
+          integer_to_list(length(TournamentManagerTids) + 1)),
         printnameln("Nodename = ~p", [Nodename]),
 
         Tid = spawn(tournament_manager, tournament_main,

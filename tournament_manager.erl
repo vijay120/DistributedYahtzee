@@ -18,6 +18,17 @@
 %% ====================================================================
 -define(TEMP, 1).
 -define(GLOBALNAME, "TournamentManager").
+
+% For UserTable indexing...
+-define(PID, 1).
+-define(USERNAME, 2).
+-define(PASSWORD, 3).
+-define(LOGIN_TICKET, 4).
+-define(IS_LOGIN, 5).
+-define(MATCH_WINS, 6).
+-define(MATCH_LOSSES, 7).
+-define(TOURNAMENTS_PLAYED, 8).
+-define(TOURNAMENTS_WIN, 9).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
@@ -30,7 +41,7 @@ tournament_main(Params) ->
   NumPlayers = hd(tl(tl(Params))),
   GamesPerMatch = hd(tl(tl(tl(Params)))),
   Players = tl(tl(tl(tl(Params)))),
-  Usernames = lists:map(fun(Player) -> element(2, Player) end, Players),
+  Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
   register(NodeName, self()),
@@ -51,7 +62,7 @@ tournament_main(Params) ->
 
 
 ask_each_player_to_join_tournament(Pid, Tid, Players) ->
-  UserPids = lists:map(fun(Player) -> element(1, Player) end, Players),
+  UserPids = lists:map(fun(Player) -> element(?PID, Player) end, Players),
   lists:map(fun(X) -> X ! {start_tournament, Pid, {Tid}} end, UserPids).
 
 % This is the case when all players reply.

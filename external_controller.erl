@@ -38,8 +38,11 @@ loop_once() ->
     %        tournament, and optional-data is optional implementation-dependent
     %        data about the tournament (such as a representation of the bracket).
     %        (Sent in response to a request_tournament.)
-    {tournament_started, Pid, {Tid, Players, OptionalData}} ->
-      printnameln("The list of players is ~p", [Players]);
+    {tournament_started, Pid, {Tid, Players, _OptionalData}} ->
+      printnameln("Received a tournament_started message from ~p with tid = ~p",
+        [Pid, Tid]),
+      printnameln("The list of players is ~p", [Players]),
+      printnameln("");
 
     % tournament-status - data is a tuple
     %     { tid, status, winner, optional-data } where
@@ -53,9 +56,12 @@ loop_once() ->
     %           data about the tournament (such as a representation of the bracket).
     % (Sent in response to a tournament-info.)
     % A tournament-info requesting information about an invalid tournament ID is ignored.
-    {tournament_status, Pid, {Tid, Status, Winner, OptionalData}} ->
+    {tournament_status, Pid, {Tid, Status, Winner, _OptionalData}} ->
+      printnameln("Received a tournament_status message from ~p with tid = ~p",
+        [Pid, Tid]),
       printnameln("The tournament status is ~p. The winner is ~p",
-        [Status, Winner]);
+        [Status, Winner]),
+      printnameln("");
 
     % user-status - data is a tuple
     %   { username, match-wins, match-losses, tournaments-played, tournament-wins } where
@@ -70,15 +76,19 @@ loop_once() ->
     %     information about an invalid username is ignored.
     {user_status, Pid, {Username, MatchWins, MatchLosses,
       TournamentsPlayed, TournamentWins}} ->
+       printnameln("Received a user_status message from ~p with username = ~p",
+        [Pid, Username]),
       printnameln("The match wins is ~p", [MatchWins]),
       printnameln("The match losses is ~p", [MatchLosses]),
       printnameln("The tournaments played are ~p", [TournamentsPlayed]),
-      printnameln("The tournaments wins is ~p", [TournamentWins]);
+      printnameln("The tournaments wins is ~p", [TournamentWins]),
+      printnameln("");
 
     {error, Error} ->
       printnameln("Error: ~p", [Error]);
     _ ->
-      printnameln("Error: Bad response!")
+      printnameln("Error: Bad response!"),
+      printnameln("")
   end,
   halt().
 
