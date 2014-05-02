@@ -37,36 +37,72 @@
 -define(YAHTZEEINDEX, 12).
 -define(BONUSINDEX, 14).
 
+-define(PID, 1).
+-define(USERNAME, 2).
+-define(PASSWORD, 3).
+-define(LOGIN_TICKET, 4).
+-define(IS_LOGIN, 5).
+-define(MATCH_WINS, 6).
+-define(MATCH_LOSSES, 7).
+-define(TOURNAMENTS_PLAYED, 8).
+-define(TOURNAMENTS_WIN, 9).
+
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
 referee_main(Params) ->
+	io:format("Helloworld"),
 	_ = os:cmd("epmd -daemon"),
 	Reg_name = hd(Params),
+	PlayerATuple  = lists:nth(1, hd(tl(Params))),
+	PlayerBTuple = lists:nth(2, hd(tl(Params))),
+	TournamentId = hd(tl(tl(Params))),
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
-	User_table = hd(tl(Params)),
-	io:format(lists:nth(1, User_table)),
 	printnameln("My node is ~p", [node()]),
 	printnameln("My pid is ~p", [self()]),
 	register(referee, self()),
-	findMyPlayersAndGameId().
+	findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId).
 
 
-findMyPlayersAndGameId() ->
-	receive
-		{Pid, assign_players_and_gameId, PlayerAName, PlayerBName, PlayerAPid, PlayerBPid, GameId, TournamentId} -> 
-			printnameln("PlayerAPid is ~p", [PlayerAPid]),
-			printnameln("PlayerBPid is ~p", [PlayerBPid]),
-			printnameln("GameID is ~p", [GameId]),
-			printnameln("Player A userid is ~p", [PlayerAName]),
-			printnameln("Player B userid is ~p", [PlayerBName]),
-			random:seed(now()),
-			timer:sleep(100),
-			ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
-			ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
-			handle_game(?FIRSTROUND, TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, ScorecardB, PlayerAPid, PlayerBPid);
-		_ -> printnameln("whateves man")
-	end.
+findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
+	GameId = self(),
+	PlayerAPid = element(?PID, PlayerATuple),
+	PlayerAName = element(?USERNAME, PlayerATuple),
+	PlayerBPid = element(?PID, PlayerBTuple),
+	PlayerBName = element(?USERNAME, PlayerBTuple),
+	random:seed(now()),
+	timer:sleep(100),
+	ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+	ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+	handle_game(?FIRSTROUND, 
+				TournamentId, 
+				GameId, 
+				PlayerAName, PlayerBName, 
+				ScorecardA, ScorecardB, 
+				PlayerAPid, PlayerBPid).
+
+	% receive
+	% 	%{Pid, assign_players_and_gameId, PlayerAName, PlayerBName, PlayerAPid, PlayerBPid, GameId, TournamentId, UserTable} -> 
+	% 	{Pid, assign_players_and_gameId, UserTable, GameId, TournamentId} -> 
+
+	% 		PlayerA = hd([X || X <- UserTables, element(?USERNAME, X) == PlayerAName]),
+	% 		PlayerB = hd([X || X <- UserTables, element(?USERNAME, X) == PlayerBName]),
+
+	% 		PlayerAPid = element(?PID, PlayerA),
+	% 		PlayerBPid = element(?PID, PlayerB),
+
+	% 		printnameln("PlayerAPid is ~p", [PlayerAPid]),
+	% 		printnameln("PlayerBPid is ~p", [PlayerBPid]),
+	% 		printnameln("GameID is ~p", [GameId]),
+	% 		printnameln("Player A userid is ~p", [PlayerAName]),
+	% 		printnameln("Player B userid is ~p", [PlayerBName]),
+	% 		random:seed(now()),
+	% 		timer:sleep(100),
+	% 		ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+	% 		ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+	% 		handle_game(?FIRSTROUND, TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, ScorecardB, PlayerAPid, PlayerBPid, UserTable);
+	% 	_ -> printnameln("whateves man")
+	% end.
 
 %This function handles all the logic and enforcement of rukes
 score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
@@ -151,8 +187,8 @@ handle_roll(	Tid,
 			ReplacedScoreCardB = checkIfYahtzeeBonusApplicable(DieToB, PlayerBScoreCard),
 
 			%Step 2: Send the message!
-			{player, enuge@ash} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-			{player, enuge@lothlorien}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+			PlayerAPid ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
+			PlayerBPid  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
 
 			%Recieve for player A only
 			receive

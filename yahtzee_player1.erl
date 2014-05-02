@@ -45,6 +45,7 @@ main(Params) ->
 
 	SystManagersAtoms = lists:map(fun(X) -> list_to_atom(X) end, SysManagers),
 	printnameln("before netstart"),
+	io:format("My pid is ~p", [self()]),
 	net_kernel:start([list_to_atom(RegName), shortnames]),
 	register(player, self()), % Useful for testing to send message by node name
 
