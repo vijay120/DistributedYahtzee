@@ -21,14 +21,15 @@
 
 % For UserTable indexing...
 -define(PID, 1).
--define(USERNAME, 2).
--define(PASSWORD, 3).
--define(LOGIN_TICKET, 4).
--define(IS_LOGIN, 5).
--define(MATCH_WINS, 6).
--define(MATCH_LOSSES, 7).
--define(TOURNAMENTS_PLAYED, 8).
--define(TOURNAMENTS_WIN, 9).
+-define(NODE, 2).
+-define(USERNAME, 3).
+-define(PASSWORD, 4).
+-define(LOGIN_TICKET, 5).
+-define(IS_LOGIN, 6).
+-define(MATCH_WINS, 7).
+-define(MATCH_LOSSES, 8).
+-define(TOURNAMENTS_PLAYED, 9).
+-define(TOURNAMENTS_WIN, 10).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================

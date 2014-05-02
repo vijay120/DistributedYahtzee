@@ -52,7 +52,7 @@ main(Params) ->
 	printnameln("Just before global send SysManagers: ~p", [SystManagersAtoms]),
 	lists:map(fun(X) -> net_kernel:connect_node(X) end, SystManagersAtoms),
 	lists:map(fun(X) -> {yahtzee_manager, X} !
-		{login, self(), Username, {Username, Password}} end, SystManagersAtoms),
+		{login, self(), node(), {Username, Password}} end, SystManagersAtoms),
 
 	printnameln("My PID is: ~p", [self()]),
 
