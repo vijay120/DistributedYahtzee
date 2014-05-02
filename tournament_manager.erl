@@ -5,7 +5,7 @@
 -module(tournament_manager).
 
 %% ## Not supposed to be started by a command line
-% args: tournament_main <pid> nodename num-players games-per-match [username]
+% args: tournament_main <eid> <tid> nodename num-players games-per-match [username]
 
 -import(yahtzee_manager, [println/1, println/2]).
 -import(referee, [referee_main/1]).
@@ -37,11 +37,12 @@
 tournament_main(Params) ->
   % The only parameter is the name of the node to register. This
   % should be a lowercase ASCII string with no periods or @ signs.
-  TournamentRequesterPid = hd(Params),
-  NodeName = list_to_atom(hd(tl(Params))),
-  NumPlayers = hd(tl(tl(Params))),
-  GamesPerMatch = hd(tl(tl(tl(Params)))),
-  Players = tl(tl(tl(tl(Params)))),
+  ExternalControllerPid = hd(Params),        % <eid>
+  YahtzeeManagerPid = hd(tl(Params)),        % <yid>
+  NodeName = list_to_atom(hd(tl(tl(Params)))),
+  NumPlayers = hd(tl(tl(tl(Params)))),
+  GamesPerMatch = hd(tl(tl(tl(tl(Params))))),
+  Players = tl(tl(tl(tl(tl(Params))))),
   Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
@@ -50,12 +51,11 @@ tournament_main(Params) ->
     [NodeName, node(), self()]),
   RefereeGids = [],
   OptionalData = [],
-  Pid = self(),
   Tid = self(),
   HardCodedTid = 90,
-  NewTid = spawn(referee, referee_main, ["referee", Players, HardCodedTid]),
-  ask_each_player_to_join_tournament(Pid, Tid, Players),
-  wait_for_all_players(TournamentRequesterPid, Usernames, Usernames, OptionalData),
+  NewTid = spawn(referee, referee_main, [["referee", Players, HardCodedTid]]),
+  ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
+  wait_for_all_players(ExternalControllerPid, Usernames, Usernames, OptionalData),
   play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
 
@@ -64,24 +64,25 @@ tournament_main(Params) ->
 %% ====================================================================
 
 
-ask_each_player_to_join_tournament(Pid, Tid, Players) ->
+ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players) ->
   UserPids = lists:map(fun(Player) -> element(?PID, Player) end, Players),
   Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
   PidsUsernames = lists:zip(UserPids, Usernames),
+  printnameln("The list of users is ~p.", [Usernames]),
   lists:map(
     fun({UserPid, Username}) ->
-      UserPid ! {start_tournament, Pid, Username, {Tid}},
-      printnameln("Ask user ~p at ~p to join the tournament ~p",
+      UserPid ! {start_tournament, YahtzeeManagerPid, Username, {Tid}},
+      printnameln("Send a start_tournament request to user ~p at ~p to join the tournament ~p.",
         [Username, UserPid, Tid])
     end,
-    UserPids).
+    PidsUsernames).
 
 % This is the case when all players reply.
-wait_for_all_players(TournamentRequesterPid, [], Usernames, OptionalData) ->
+wait_for_all_players(ExternalControllerPid, [], Usernames, OptionalData) ->
     PidForReply = self(),
     Tid = self(),
-    TournamentRequesterPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
-wait_for_all_players(TournamentRequesterPid, WaitingUsernames, Usernames, OptionalData) ->
+    ExternalControllerPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
+wait_for_all_players(ExternalControllerPid, WaitingUsernames, Usernames, OptionalData) ->
   OnePlayer = 
     receive
       % accept_tournament - data is a tuple
@@ -129,7 +130,7 @@ wait_for_all_players(TournamentRequesterPid, WaitingUsernames, Usernames, Option
               [MessageType, Pid, Data]),
           Pid ! {error, "Malformed message."}
     end,
-  wait_for_all_players(TournamentRequesterPid, WaitingUsernames -- [OnePlayer], Usernames, OptionalData).
+  wait_for_all_players(ExternalControllerPid, WaitingUsernames -- [OnePlayer], Usernames, OptionalData).
 
 
 play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->

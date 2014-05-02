@@ -97,6 +97,7 @@ listen(TournamentManagerTids, UserTables) ->
           [
             [
               Pid,
+              self(),
               Nodename, 
               NumPlayers,
               GamesPerMatch

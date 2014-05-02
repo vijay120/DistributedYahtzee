@@ -38,14 +38,15 @@
 -define(BONUSINDEX, 14).
 
 -define(PID, 1).
--define(USERNAME, 2).
--define(PASSWORD, 3).
--define(LOGIN_TICKET, 4).
--define(IS_LOGIN, 5).
--define(MATCH_WINS, 6).
--define(MATCH_LOSSES, 7).
--define(TOURNAMENTS_PLAYED, 8).
--define(TOURNAMENTS_WIN, 9).
+-define(NODENAME, 2).
+-define(USERNAME, 3).
+-define(PASSWORD, 4).
+-define(LOGIN_TICKET, 5).
+-define(IS_LOGIN, 6).
+-define(MATCH_WINS, 7).
+-define(MATCH_LOSSES, 8).
+-define(TOURNAMENTS_PLAYED, 9).
+-define(TOURNAMENTS_WIN, 10).
 
 %% ====================================================================
 %%                            Main Function
@@ -68,8 +69,11 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
 	GameId = self(),
 	PlayerAPid = element(?PID, PlayerATuple),
 	PlayerAName = element(?USERNAME, PlayerATuple),
+	PlayerANode = element(?NODENAME, PlayerATuple),
 	PlayerBPid = element(?PID, PlayerBTuple),
 	PlayerBName = element(?USERNAME, PlayerBTuple),
+	PlayerBNode = element(?NODENAME, PlayerBTuple),
+
 	random:seed(now()),
 	timer:sleep(100),
 	ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
@@ -79,7 +83,7 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
 				GameId, 
 				PlayerAName, PlayerBName, 
 				ScorecardA, ScorecardB, 
-				PlayerAPid, PlayerBPid).
+				PlayerANode, PlayerBNode).
 
 	% receive
 	% 	%{Pid, assign_players_and_gameId, PlayerAName, PlayerBName, PlayerAPid, PlayerBPid, GameId, TournamentId, UserTable} -> 
@@ -125,7 +129,7 @@ handle_game(	Round,
 				Gid, 
 				PlayerAName, PlayerBName, 
 				PlayerAScoreCard, PlayerBScoreCard, 
-				PlayerAPid, PlayerBPid) ->
+				PlayerANode, PlayerBNode) ->
 
 	if Round > 13 -> 
 			printnameln("Game is done!");
@@ -137,21 +141,21 @@ handle_game(	Round,
 			ChoiceA = ?INITIALDIECHOICE,
 			ChoiceB = ?INITIALDIECHOICE,
 
-			[NewPlayerAScoreCard, NewPlayerBScoreCard]	=				handle_roll(	Tid, 
-																						Gid, 
-																						?FIRSTROLL, 
-																						PlayerAName, PlayerBName, 
-																						PlayerAScoreCard, PlayerBScoreCard, 
-																						DieOutcomesA, DieOutcomesB, 
-																						PlayerAPid, PlayerBPid, 
-																						ChoiceA, ChoiceB),
+			[NewPlayerAScoreCard, NewPlayerBScoreCard]	=	handle_roll(	Tid, 
+																			Gid, 
+																			?FIRSTROLL, 
+																			PlayerAName, PlayerBName, 
+																			PlayerAScoreCard, PlayerBScoreCard, 
+																			DieOutcomesA, DieOutcomesB, 
+																			PlayerANode, PlayerBNode, 
+																			ChoiceA, ChoiceB),
 
 			handle_game(	Round+1,
 							Tid, 
 							Gid, 
 							PlayerAName, PlayerBName, 
 							NewPlayerAScoreCard, NewPlayerBScoreCard,
-							PlayerAPid, PlayerBPid)
+							PlayerANode, PlayerBNode)
 	end.
 
 	
@@ -161,7 +165,7 @@ handle_roll(	Tid,
 				PlayerAName, PlayerBName, 
 				PlayerAScoreCard, PlayerBScoreCard, 
 				DieOutcomesA, DieOutcomesB,
-				PlayerAPid, PlayerBPid, 
+				PlayerANode, PlayerBNode, 
 				ChoiceA, ChoiceB) ->
 
 	if Roll > 3 ->
@@ -187,8 +191,10 @@ handle_roll(	Tid,
 			ReplacedScoreCardB = checkIfYahtzeeBonusApplicable(DieToB, PlayerBScoreCard),
 
 			%Step 2: Send the message!
-			PlayerAPid ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-			PlayerBPid  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+
+			% WE HAD TO USE THE NODE ID SINCE THE PID'S COULD BE THE SAME!
+			{player, PlayerANode} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
+			{player, PlayerBNode}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
 
 			%Recieve for player A only
 			receive
@@ -261,9 +267,9 @@ handle_roll(	Tid,
 												DiceToKeepA, DiceToKeepB)
 							end;
 
-						_ -> printnameln("Invalid message type")
+						InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
 					end;
-				_ -> printnameln("Invalid message type")
+				InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
 			end
 		end.
 
