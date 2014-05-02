@@ -4,10 +4,10 @@ external_controller:
 		- tournament_info: { tid }
 		- user_info: { username }
 
-system_manager (sid, nodename, nodename@host):
-	- [tid] (list of tournament_manager)
-	- [{pid, username, password, login_ticket, is_login,
-		match-wins, match-losses, tournaments-played, tournament-wins}]
+yahtzee_manager (yid, nodename, nodename@host):
+	- TidList ([tid], list of tournament_manager)
+	- UserTable ([{pid, username, password, login_ticket, is_login,
+		match-wins, match-losses, tournaments-played, tournament-wins}])
 
 tournament_manager (tid):
 	- num_players (int)
@@ -41,25 +41,44 @@ username (string)
 password (string)
 
 messages:
-	- yahtzee_manager -> player:
-		- {logged_in, self(), Username, {LoginTicket}}
-	- referee -> player:
-		- start_tournament: { tid }
-		- end_tournament: { tid }
-		- {play_request, Pid, Username, {Red, Tid, Gid, RollNumber, Dice, Scorecard, OpponentScorecard}}
-	- player -> yahtzee_manager
-		- {login, Pid, _Username, {Username, Password}}
-		- {logout, Pid, {LoginTicket}}
-		- {accept_tournament, Pid, {Tid, LoginTicket}}
-		- {reject_tournament, Pid, {Tid, LoginTicket}}
-		- {play_action, Pid, {Ref, Tid, Gid, RollNumber, DiceToKeep, ScorecardLine}}
 	- external_controller -> yahtzee_manager
-		- {request_tournament, Pid, {NumPlayers, GamesPerMatch}}
-		- {tournament_info, Pid, {TournamentId}}
-		- {user_info, Pid, {Username}}
+		- request_tournament: {request_tournament, Pid, {NumPlayers, GamesPerMatch}}
+			->> The player list is aggregated from currently loggin Player. 
+			->> yahtzee_manager spawns a new tournament_manager for this tournament.
+			->> tournament_manager sends start_tournament to each player.
+			->> tournament_manager waits to get responses from all players.
+			->> If a player sends an accept_tournament, awesome! tournament_manager counts it in.
+			->> If a player sends an reject_tournament, too bad! tournament_manager replaces it with a bye.
+			(in future iterations, it might try to find a new player, and replace by a bye only after a timeout)
+			->> When all players replied, tournament_manager sends tournament_started
+				to the requesting external_controller.
+		- tournament_info: {tournament_info, Pid, {TournamentId}}
+		- user_info: {user_info, Pid, {Username}}
 	- yahtzee_manager -> external_controller
-		- tournament_started: { tid, players, optional-data }
-		- tournament_status: { tid, status, winner, optional-data }
-		- user_status: { username, match-wins, match-losses, tournaments-played, tournament-wins }
+		- tournament_started: {tournament_started, Tid, Players, OptionalData }
+		- tournament_status: {tournament_status, Tid, Status, Winner, OptionalData }
+		- user_status: {Username, MatchWins, MatchLosses, TournamentsPlayed, TournamentWins }
+
+	- yahtzee_manager -> tournament_manager
+		- main <pid> nodename num-players games-per-match [username]
+
+	- yahtzee_manager -> player:
+		- logged_in: {logged_in, Pid, Username, {LoginTicket}}
+	- player -> yahtzee_manager
+		- login: {login, Pid, _Username, {Username, Password}}
+		- logout: {logout, Pid, {LoginTicket}}
+		- accept_tournament: {accept_tournament, Pid, {Tid, LoginTicket}}
+		- reject_tournament: {reject_tournament, Pid, {Tid, LoginTicket}}
+		- play_action: {play_action, Pid, {Ref, Tid, Gid, RollNumber, DiceToKeep, ScorecardLine}}
+
+	- tournament_manager -> player:
+		- start_tournament: {start_tournament, Pid, {Tid}}
+			# This message must be sent to a player for a tournament x,
+			# and a positive response (accept_tournament) must be received from the player,
+			# before any subsequent gameplay messages for tournament x are sent to that player.
+		- end_tournament: {end_tournament, Pid, {Tid}}
+
+	- referee -> player:
+		- play_request: {play_request, Pid, Username, {Red, Tid, Gid, RollNumber, Dice, Scorecard, OpponentScorecard}}
 	- referee -> referee OR tournament_manager -> yahtzee_manager
-		- {report_game_results, Pid, {[{Username, MatchWins, MatchLosses}], Winner}}
+		- report_game_results: {report_game_results, Pid, {[{Username, MatchWins, MatchLosses}], Winner}}

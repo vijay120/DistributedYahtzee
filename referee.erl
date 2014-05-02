@@ -4,7 +4,7 @@
 %% @author Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
 -module(referee).
 
--import(distributed_yahtzee, [println/1, println/2]).
+-import(yahtzee_manager, [println/1, println/2]).
 -import(yahtzee_player1, [calcUpper/3, calcThreeKind/2, calcFourKind/2,
 		 calcFullHouse/2, calcSmallStraight/2, calcLargeStraight/2, calcYahtzee/2,
 		 calcChance/2]).
@@ -46,8 +46,8 @@ referee_main(Params) ->
 	net_kernel:start([list_to_atom(Reg_name), shortnames]),
 	User_table = hd(tl(Params)),
 	io:format(lists:nth(1, User_table)),
-	io:format("My node is ~p", [node()]),
-	io:format("My pid is ~p", [self()]),
+	printnameln("My node is ~p", [node()]),
+	printnameln("My pid is ~p", [self()]),
 	register(referee, self()),
 	findMyPlayersAndGameId().
 
@@ -55,17 +55,17 @@ referee_main(Params) ->
 findMyPlayersAndGameId() ->
 	receive
 		{Pid, assign_players_and_gameId, PlayerAName, PlayerBName, PlayerAPid, PlayerBPid, GameId, TournamentId} -> 
-			io:format("PlayerAPid is ~p", [PlayerAPid]),
-			io:format("PlayerBPid is ~p", [PlayerBPid]),
-			io:format("GameID is ~p", [GameId]),
-			io:format("Player A userid is ~p", [PlayerAName]),
-			io:format("Player B userid is ~p", [PlayerBName]),
+			printnameln("PlayerAPid is ~p", [PlayerAPid]),
+			printnameln("PlayerBPid is ~p", [PlayerBPid]),
+			printnameln("GameID is ~p", [GameId]),
+			printnameln("Player A userid is ~p", [PlayerAName]),
+			printnameln("Player B userid is ~p", [PlayerBName]),
 			random:seed(now()),
 			timer:sleep(100),
 			ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
 			ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
 			handle_game(?FIRSTROUND, TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, ScorecardB, PlayerAPid, PlayerBPid);
-		_ -> io:format("whateves man")
+		_ -> printnameln("whateves man")
 	end.
 
 %This function handles all the logic and enforcement of rukes
@@ -92,7 +92,7 @@ handle_game(	Round,
 				PlayerAPid, PlayerBPid) ->
 
 	if Round > 13 -> 
-			io:format("Game is done!");
+			printnameln("Game is done!");
 	true -> 
 			random:seed(now()),
 			timer:sleep(100),
@@ -130,13 +130,13 @@ handle_roll(	Tid,
 
 	if Roll > 3 ->
 		%The last roll is over, so pass the results to the tournament manager
-		% io:format("Player A's score is: ~p~n", [PlayerAScore]),
-		% io:format("Player B's score is: ~p~n", [PlayerBScore]),
+		% printnameln("Player A's score is: ~p~n", [PlayerAScore]),
+		% printnameln("Player B's score is: ~p~n", [PlayerBScore]),
 		TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
 		TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-		if TotalScoreForA > TotalScoreForB -> io:format("Player A wins");
-			true -> io:format("Player B wins!")
+		if TotalScoreForA > TotalScoreForB -> printnameln("Player A wins");
+			true -> printnameln("Player B wins!")
 		end,
 
 		[PlayerAScoreCard, PlayerBScoreCard];
@@ -169,8 +169,8 @@ handle_roll(	Tid,
 
 								if 
 									ValueAtScoreCardRowForA =/= -1
-											-> io:format("A cheated~n");
-									true 	-> io:format("A has a valid move~n")
+											-> printnameln("A cheated~n");
+									true 	-> printnameln("A has a valid move~n")
 								end,
 
 								NewPlayerAScore = score_logic(ScorecardAChoice, lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
@@ -180,16 +180,16 @@ handle_roll(	Tid,
 												[NewPlayerAScore] ++ 
 												element(2, lists:split(ScorecardAChoice, PlayerAScoreCard)),
 
-								io:format("Player A's scorecard is: ~p~n", [NewScorecardA]),
-								io:format("Player A's choice is: ~p~n", [ScorecardAChoice]),
-								io:format("Player A's die is: ~p~n", [DieToA]),
-								io:format("Player A scores: ~p~n", [NewPlayerAScore]),
+								printnameln("Player A's scorecard is: ~p~n", [NewScorecardA]),
+								printnameln("Player A's choice is: ~p~n", [ScorecardAChoice]),
+								printnameln("Player A's die is: ~p~n", [DieToA]),
+								printnameln("Player A scores: ~p~n", [NewPlayerAScore]),
 
 
 								%check if the slots are already taken
 								if ValueAtScoreCardRowForB =/= -1 
-											-> io:format("B cheated");
-									true 	-> io:format("B has a valid move")
+											-> printnameln("B cheated");
+									true 	-> printnameln("B has a valid move")
 								end,
 
 								NewPlayerBScore = score_logic(ScorecardBChoice, lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
@@ -198,10 +198,10 @@ handle_roll(	Tid,
 												[NewPlayerBScore] ++ 
 												element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
 
-								io:format("Player B's scorecard is: ~p~n", [NewScorecardB]),
-								io:format("Player B's choice is: ~p~n", [ScorecardBChoice]),
-								io:format("Player B's die is: ~p~n", [DieToB]),
-								io:format("Player B scores: ~p~n", [NewPlayerBScore]),
+								printnameln("Player B's scorecard is: ~p~n", [NewScorecardB]),
+								printnameln("Player B's choice is: ~p~n", [ScorecardBChoice]),
+								printnameln("Player B's die is: ~p~n", [DieToB]),
+								printnameln("Player B scores: ~p~n", [NewPlayerBScore]),
 
 								TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
 								TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
@@ -225,9 +225,9 @@ handle_roll(	Tid,
 												DiceToKeepA, DiceToKeepB)
 							end;
 
-						_ -> io:format("Invalid message type")
+						_ -> printnameln("Invalid message type")
 					end;
-				_ -> io:format("Invalid message type")
+				_ -> printnameln("Invalid message type")
 			end
 		end.
 
@@ -253,18 +253,18 @@ end.
 
 %this method is used to find the next roll to die to pass on to the players
 send_die_from_choice(DieSequence, Choice, Roll, CurrentIndex, AccumulatedDieSeq) ->
-	% io:format("The die sequence is ~p~n", [DieSequence]),
-	% io:format("The current index is ~p~n", [CurrentIndex]),
-	% io:format("The choice is ~p~n", [Choice]),
+	% printnameln("The die sequence is ~p~n", [DieSequence]),
+	% printnameln("The current index is ~p~n", [CurrentIndex]),
+	% printnameln("The choice is ~p~n", [Choice]),
 	if  CurrentIndex > length(Choice) -> AccumulatedDieSeq;
 	true -> 
 		Boolean = lists:nth(CurrentIndex, Choice),
 		if Boolean == false -> 
-			% io:format("The die sequence inside the if statement is ~p~n", [DieSequence]),
+			% printnameln("The die sequence inside the if statement is ~p~n", [DieSequence]),
 			NextIndex = CurrentIndex*(Roll-1) + ?NEXTDIE,
-			% io:format("The next index is: ~p~n", [NextIndex]),
+			% printnameln("The next index is: ~p~n", [NextIndex]),
 			Problem = lists:nth(NextIndex, DieSequence),
-			% io:format("Problem is: ~p~n", [Problem]),
+			% printnameln("Problem is: ~p~n", [Problem]),
 			NewAccumulatedDieSeq = AccumulatedDieSeq ++ [lists:nth(NextIndex, DieSequence)],
 			send_die_from_choice(DieSequence, Choice, Roll, CurrentIndex+1, NewAccumulatedDieSeq);
 		true -> 
@@ -285,6 +285,10 @@ generate_fixed_length_lists(Type, Count) ->
 		end
 	end.
 
+
+%% ====================================================================
+%%                       Pretty Print Functions
+%% ====================================================================
 getName() ->
   ?GLOBALNAME ++ io_lib:format("~p", [self()]).
 

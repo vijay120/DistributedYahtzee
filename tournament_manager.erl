@@ -5,9 +5,10 @@
 -module(tournament_manager).
 
 %% ## Not supposed to be started by a command line
-% args: main <pid> nodename num-players games-per-match [username]
+% args: tournament_main <pid> nodename num-players games-per-match [username]
 
 -import(yahtzee_manager, [println/1, println/2]).
+
 %% ====================================================================
 %%                             Public API
 %% ====================================================================
@@ -17,10 +18,21 @@
 %% ====================================================================
 -define(TEMP, 1).
 -define(GLOBALNAME, "TournamentManager").
+
+% For UserTable indexing...
+-define(PID, 1).
+-define(USERNAME, 2).
+-define(PASSWORD, 3).
+-define(LOGIN_TICKET, 4).
+-define(IS_LOGIN, 5).
+-define(MATCH_WINS, 6).
+-define(MATCH_LOSSES, 7).
+-define(TOURNAMENTS_PLAYED, 8).
+-define(TOURNAMENTS_WIN, 9).
 %% ====================================================================
 %%                            Main Function
 %% ====================================================================
-% The main/1 function.
+% The tournament_main/1 function.
 tournament_main(Params) ->
   % The only parameter is the name of the node to register. This
   % should be a lowercase ASCII string with no periods or @ signs.
@@ -28,7 +40,8 @@ tournament_main(Params) ->
   NodeName = list_to_atom(hd(tl(Params))),
   NumPlayers = hd(tl(tl(Params))),
   GamesPerMatch = hd(tl(tl(tl(Params)))),
-  Usernames = tl(tl(tl(tl(Params)))),
+  Players = tl(tl(tl(tl(Params)))),
+  Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
   register(NodeName, self()),
@@ -36,6 +49,9 @@ tournament_main(Params) ->
     [NodeName, node()]),
   RefereeGids = [],
   OptionalData = [],
+  Pid = self(),
+  Tid = self(),
+  ask_each_player_to_join_tournament(Pid, Tid, Players),
   wait_for_all_players(TournamentRequesterPid, Usernames, Usernames, OptionalData),
   play(NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
@@ -43,11 +59,17 @@ tournament_main(Params) ->
 %% ====================================================================
 %%                      TM <-> Players Functions
 %% ====================================================================
+
+
+ask_each_player_to_join_tournament(Pid, Tid, Players) ->
+  UserPids = lists:map(fun(Player) -> element(?PID, Player) end, Players),
+  lists:map(fun(X) -> X ! {start_tournament, Pid, {Tid}} end, UserPids).
+
+% This is the case when all players reply.
 wait_for_all_players(TournamentRequesterPid, [], Usernames, OptionalData) ->
-    Pid = TournamentRequesterPid,
     PidForReply = self(),
     Tid = self(),
-    Pid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
+    TournamentRequesterPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
 wait_for_all_players(TournamentRequesterPid, WaitingUsernames, Usernames, OptionalData) ->
   OnePlayer = 
     receive
@@ -111,8 +133,8 @@ play(NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData)
 getName() ->
   ?GLOBALNAME ++ io_lib:format("~p", [self()]).
 
-printnameln(ToPrint) ->
-  println(io_lib:format("~s > ", [getName()]) ++ ToPrint).
+% printnameln(ToPrint) ->
+%   println(io_lib:format("~s > ", [getName()]) ++ ToPrint).
 
 printnameln(ToPrint, Options) ->
   println(io_lib:format("~s > ", [getName()]) ++ ToPrint, Options).
