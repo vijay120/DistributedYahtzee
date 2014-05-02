@@ -1,13 +1,13 @@
 external_controller:
 	- parameters are generated here and kept track based on the messages below:
-		- request_tournament: { num-players, games-per-match }
-		- tournament_info: { tid }
-		- user_info: { username }
+		- request_tournament: {request_tournament, Pid, {NumPlayers, GamesPerMatch}}
+		- tournament_info: {tournament_info, Pid, {TournamentId}}
+		- user_info: {user_info, Pid, {Username}}
 
 yahtzee_manager (yid, nodename, nodename@host):
 	- TidList ([tid], list of tournament_manager)
-	- UserTable ([{pid, username, password, login_ticket, is_login,
-		match-wins, match-losses, tournaments-played, tournament-wins}])
+	- UserTable ([{Pid, Username, Password, LoginTicket, IsLogin,
+		MatchWins, MatchLosses, TournamentsPlayed, TournamentWins}])
 
 tournament_manager (tid):
 	- num_players (int)

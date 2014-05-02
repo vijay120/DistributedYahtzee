@@ -45,8 +45,8 @@ tournament_main(Params) ->
   % IMPORTANT: Start the epmd daemon!
   os:cmd("epmd -daemon"),
   register(NodeName, self()),
-  printnameln("Registered with the process name = ~p, nodename = ~p",
-    [NodeName, node()]),
+  printnameln("Registered with the process name = ~p, nodename = ~p, pid = ~p",
+    [NodeName, node(), self()]),
   RefereeGids = [],
   OptionalData = [],
   Pid = self(),
@@ -63,7 +63,15 @@ tournament_main(Params) ->
 
 ask_each_player_to_join_tournament(Pid, Tid, Players) ->
   UserPids = lists:map(fun(Player) -> element(?PID, Player) end, Players),
-  lists:map(fun(X) -> X ! {start_tournament, Pid, {Tid}} end, UserPids).
+  Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
+  PidsUsernames = lists:zip(UserPids, Usernames),
+  lists:map(
+    fun({UserPid, Username}) ->
+      UserPid ! {start_tournament, Pid, Username, {Tid}},
+      printnameln("Ask user ~p at ~p to join the tournament ~p",
+        [Username, UserPid, Tid])
+    end,
+    UserPids).
 
 % This is the case when all players reply.
 wait_for_all_players(TournamentRequesterPid, [], Usernames, OptionalData) ->
