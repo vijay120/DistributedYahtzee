@@ -79,9 +79,18 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 	end,
 
 	receive
+		{please_logout, Pid, Username, {}} ->
+			printnameln("Received a please_logout message"),
+			lists:map(
+				fun({SystemPid, LoginTicket}) ->
+					SystemPid ! {logout, self(), Username, {LoginTicket}} end,
+				LoginTickets),
+			Pid ! {logged_out, self(), Username, {}};
+
 		{logged_in, Pid, Username, {NewLoginTicket}} ->
 			printnameln("Received a logged_in message"),
 			handleMessages(Username, [{Pid, NewLoginTicket} | LoginTickets], ActiveTids, IsLoggingOut);
+
 		{start_tournament, Pid, Username, {Tid}} ->
 			printnameln("Received a start_tournament message"),
 			{_, ProperLoginTicket} = lists:keyfind(Pid, 1, LoginTickets),

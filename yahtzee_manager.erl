@@ -52,8 +52,8 @@ main(Params) ->
       printnameln("Reason: ~p", [TheReason])
   end,
   register(yahtzee_manager, self()),
-  printnameln("Registered with the process name = ~p, nodename = ~p",
-    [NodeName, node()]),
+  printnameln("Registered with the process name = ~p, nodename = ~p, pid = ~p",
+    [NodeName, node(), self()]),
   TournamentManagerTids = [],
   UserTables = [],
   listen(TournamentManagerTids, UserTables).
@@ -82,8 +82,11 @@ listen(TournamentManagerTids, UserTables) ->
             "num-players = ~p, games-per-match = ~p.",
             [Pid, NumPlayers, GamesPerMatch]),
         LoggedInPlayerList = [X || X <- UserTables, element(?IS_LOGIN, X) == true],
+        printnameln("Logged-in players are ~p", [LoggedInPlayerList]),
         % Cut down to only NumPlayers
         Players = lists:sublist(shuffle(LoggedInPlayerList), NumPlayers),
+        printnameln("Out of those, because NumPlayers = ~p, we select ~p",
+          [NumPlayers, Players]),
         _OptionalData = [],
         printnameln("Spawning a tournament_manager process..."),
         Nodename = string:concat("TournamentManager",
@@ -167,7 +170,15 @@ listen(TournamentManagerTids, UserTables) ->
             "username = ~p, password = ~p.",
             [Pid, Username, Password]),
         LoginTicket = make_ref(),
-        NewUserTables = UserTables ++ [{Pid, Username, Password, LoginTicket, true}],
+        MatchWins = [],
+        MatchLosses = [],
+        TournamentsPlayed = [],
+        TournamentWins = [],
+
+        NewUserTables = UserTables ++
+          [{Pid, Username, Password, LoginTicket, true, MatchWins,
+          MatchLosses, TournamentsPlayed, TournamentWins}],
+
         Pid ! {logged_in, self(), Username, {LoginTicket}},
         printnameln("logged_in message sent to ~p with " ++
             "login-ticket = ~p.", [Pid, LoginTicket]),
@@ -183,9 +194,12 @@ listen(TournamentManagerTids, UserTables) ->
     %       playing in tournaments until they log in again).
 
     {logout, Pid, {LoginTicket}} ->
-        % TODO: Change status of the player to logout if login ticket is good.
+        ThePlayer = hd([X || X <- UserTables, element(?LOGIN_TICKET, X) == LoginTicket]),
+        ThePlayerUpdated = setelement(?IS_LOGIN, ThePlayer, false),
+        NewUserTables = (UserTables - [ThePlayer]) ++ ThePlayerUpdated,
         printnameln("logout message received from ~p with " ++
-            "login-ticket = ~p.", [Pid, LoginTicket]);
+            "login-ticket = ~p.", [Pid, LoginTicket]),
+        listen(TournamentManagerTids, NewUserTables);
 
     % accept_tournament - data is a tuple
     %     { tid, login-ticket };
