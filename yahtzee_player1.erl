@@ -82,11 +82,8 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 	receive
 		{please_logout, Pid, Username, {}} ->
 			printnameln("Received a please_logout message"),
-			lists:map(
-				fun({SystemPid, LoginTicket}) ->
-					SystemPid ! {logout, self(), Username, {LoginTicket}} end,
-				LoginTickets),
-			Pid ! {logged_out, self(), Username, {}};
+			Pid ! {logged_out, self(), Username, {}},
+			handleMessages(Username, LoginTickets, ActiveTids, true);
 
 		{logged_in, Pid, Username, {NewLoginTicket}} ->
 			printnameln("Received a logged_in message"),
