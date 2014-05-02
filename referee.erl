@@ -17,6 +17,7 @@
 %%                             Constants
 %% ====================================================================
 -define(GLOBALNAME, "Referee").
+
 -define(DIESTATE, 6).
 -define(SCORECARDROWS, 13).
 -define(NUMPOSSIBLEDIEOUTCOMES, 15).
@@ -37,8 +38,10 @@
 -define(YAHTZEEINDEX, 12).
 -define(BONUSINDEX, 14).
 -define(NOWINS, 0).
+
+
 -define(PID, 1).
--define(NODENAME, 2).
+-define(NODE, 2).
 -define(USERNAME, 3).
 -define(PASSWORD, 4).
 -define(LOGIN_TICKET, 5).
@@ -52,15 +55,16 @@
 %%                            Main Function
 %% ====================================================================
 referee_main(Params) ->
-  io:format("Helloworld"),
-  _ = os:cmd("epmd -daemon"),
+  os:cmd("epmd -daemon"),
   Reg_name = hd(Params),
   PlayerATuple  = lists:nth(1, hd(tl(Params))),
   PlayerBTuple = lists:nth(2, hd(tl(Params))),
-  io:format("Player A tuple is ~p", [PlayerATuple]),
-  io:format("Player B tuple is ~p", [PlayerBTuple]),
+  printnameln("Player A tuple is ~p", [PlayerATuple]),
+  printnameln("Player B tuple is ~p", [PlayerBTuple]),
   TournamentId = hd(tl(tl(Params))),
+
   net_kernel:start([list_to_atom(Reg_name), shortnames]),
+
   printnameln("My node is ~p", [node()]),
   printnameln("My pid is ~p", [self()]),
   register(referee, self()),
@@ -71,15 +75,16 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
   GameId = self(),
   PlayerAPid = element(?PID, PlayerATuple),
   PlayerAName = element(?USERNAME, PlayerATuple),
-  PlayerANode = element(?NODENAME, PlayerATuple),
+  PlayerANode = element(?NODE, PlayerATuple),
   PlayerBPid = element(?PID, PlayerBTuple),
   PlayerBName = element(?USERNAME, PlayerBTuple),
-  PlayerBNode = element(?NODENAME, PlayerBTuple),
+  PlayerBNode = element(?NODE, PlayerBTuple),
 
   random:seed(now()),
   timer:sleep(100),
   ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
   ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+
   handle_game(?FIRSTROUND, 
         TournamentId, 
         GameId, 
@@ -104,56 +109,76 @@ score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
     end
   end.
 
-handle_game(  Round,
-        Tid, 
-        Gid, 
-        PlayerAName, PlayerBName, 
-        PlayerAScoreCard, PlayerBScoreCard, 
-        PlayerANode, PlayerBNode,
-        PlayerAWins, PlayerBWins) ->
-  
+handle_game(
+  Round,
+  Tid, 
+  Gid, 
+  PlayerAName, PlayerBName, 
+  PlayerAScoreCard, PlayerBScoreCard, 
+  PlayerANode, PlayerBNode,
+  PlayerAWins, PlayerBWins
+) ->  
   printnameln("In handle game"),
 
   if Round > 13 -> 
-      io:format("Game stats: ~p", [PlayerAWins, PlayerBWins]),
-      printnameln("Game is done!");
+      printnameln("Game stats: PlayerAWins = ~p, PlayerBWins = ~p",
+        [PlayerAWins, PlayerBWins]),
+      printnameln("Game is done!"),
+      {UserRecords, Winner} = case PlayerAWins > PlayerBWins of
+        true ->
+          UserRecordA = {PlayerAName, 1, 0},
+          UserRecordB = {PlayerBName, 0, 1},
+          {[UserRecordA, UserRecordB], PlayerAName};
+        false ->
+          UserRecordA = {PlayerAName, 0, 1},
+          UserRecordB = {PlayerBName, 1, 0},
+          {[UserRecordA, UserRecordB], PlayerBName}
+      end,
+      Tid ! {report_game_results, self(), {UserRecords, Winner}};
   true -> 
-      random:seed(now()),
-      timer:sleep(100),
-      DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
-      DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
-      ChoiceA = ?INITIALDIECHOICE,
-      ChoiceB = ?INITIALDIECHOICE,
+    random:seed(now()),
+    timer:sleep(100),
+    DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+    DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+    ChoiceA = ?INITIALDIECHOICE,
+    ChoiceB = ?INITIALDIECHOICE,
 
-      [NewPlayerAScoreCard, NewPlayerBScoreCard, InPlayerAWin, InPlayerBWin]  = handle_roll(Tid, 
-                                                  Gid, 
-                                                  ?FIRSTROLL, 
-                                                  PlayerAName, PlayerBName, 
-                                                  PlayerAScoreCard, PlayerBScoreCard, 
-                                                  DieOutcomesA, DieOutcomesB, 
-                                                  PlayerANode, PlayerBNode, 
-                                                  ChoiceA, ChoiceB),
-      NewPlayerAWins = PlayerAWins + InPlayerAWin,
-      NewPlayerBWins = PlayerBWins + InPlayerBWin,
+    [NewPlayerAScoreCard, NewPlayerBScoreCard, InPlayerAWin, InPlayerBWin] =
+      handle_roll(
+        Tid, 
+        Gid, 
+        ?FIRSTROLL, 
+        PlayerAName, PlayerBName, 
+        PlayerAScoreCard, PlayerBScoreCard, 
+        DieOutcomesA, DieOutcomesB, 
+        PlayerANode, PlayerBNode, 
+        ChoiceA, ChoiceB
+      ),
+    NewPlayerAWins = PlayerAWins + InPlayerAWin,
+    NewPlayerBWins = PlayerBWins + InPlayerBWin,
 
-      handle_game(  Round+1,
-              Tid, 
-              Gid, 
-              PlayerAName, PlayerBName, 
-              NewPlayerAScoreCard, NewPlayerBScoreCard,
-              PlayerANode, PlayerBNode,
-              NewPlayerAWins, NewPlayerBWins)
+    handle_game(
+      Round + 1,
+      Tid, 
+      Gid, 
+      PlayerAName, PlayerBName, 
+      NewPlayerAScoreCard, NewPlayerBScoreCard,
+      PlayerANode, PlayerBNode,
+      NewPlayerAWins, NewPlayerBWins
+    )
   end.
 
   
-handle_roll(  Tid, 
-        Gid, 
-        Roll, 
-        PlayerAName, PlayerBName, 
-        PlayerAScoreCard, PlayerBScoreCard, 
-        DieOutcomesA, DieOutcomesB,
-        PlayerANode, PlayerBNode, 
-        ChoiceA, ChoiceB) ->
+handle_roll(
+  Tid, 
+  Gid, 
+  Roll, 
+  PlayerAName, PlayerBName, 
+  PlayerAScoreCard, PlayerBScoreCard, 
+  DieOutcomesA, DieOutcomesB,
+  PlayerANode, PlayerBNode, 
+  ChoiceA, ChoiceB
+) ->
 
   printnameln("in handle roll"),
 
@@ -165,7 +190,8 @@ handle_roll(  Tid,
     TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
     if TotalScoreForA > TotalScoreForB -> [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
-      true -> [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
+      true ->
+        [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
     end;
 
     true ->
@@ -180,11 +206,16 @@ handle_roll(  Tid,
 
       % WE HAD TO USE THE NODE ID SINCE THE PID'S COULD BE THE SAME!
       printnameln("Before message sent"),
-      io:format("Player a username is: ~p", [PlayerAName]),
-      io:format("Player b username is: ~p", [PlayerBName]),
-      {player, PlayerANode} ! {play_request, self(), PlayerAName, {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-      {player, PlayerBNode}  ! {play_request, self(), PlayerBName, {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
-      printnameln("After message"),
+      printnameln("Player a username is: ~p", [PlayerAName]),
+      printnameln("Player b username is: ~p", [PlayerBName]),
+      {player, PlayerANode} !
+        {play_request, self(), PlayerAName,
+          {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
+      {player, PlayerBNode} !
+        {play_request, self(), PlayerBName,
+          {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+      printnameln("After message sent"),
+
       %Recieve for player A only
       receive
         {play_action, _, PlayerAName, {_, _, _, _, DiceToKeepA, ScorecardAChoice}} -> 
@@ -199,17 +230,19 @@ handle_roll(  Tid,
                 %check if the slots are already taken
 
                 if 
-                  ValueAtScoreCardRowForA =/= -1
-                      -> printnameln("A cheated");
-                  true  -> printnameln("A has a valid move")
+                  ValueAtScoreCardRowForA =/= -1 ->
+                    printnameln("A cheated");
+                  true  ->
+                    printnameln("A has a valid move")
                 end,
 
-                NewPlayerAScore = score_logic(ScorecardAChoice, lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
+                NewPlayerAScore = score_logic(ScorecardAChoice,
+                  lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
 
                 %Mark A's score card
-                NewScorecardA = element(1, lists:split(ScorecardAChoice-1, PlayerAScoreCard)) ++ 
-                        [NewPlayerAScore] ++ 
-                        element(2, lists:split(ScorecardAChoice, PlayerAScoreCard)),
+                NewScorecardA = element(1, lists:split(ScorecardAChoice - 1, PlayerAScoreCard)) ++ 
+                  [NewPlayerAScore] ++ 
+                  element(2, lists:split(ScorecardAChoice, PlayerAScoreCard)),
 
                 printnameln("Player A's scorecard is: ~p", [NewScorecardA]),
                 printnameln("Player A's choice is: ~p", [ScorecardAChoice]),
@@ -223,7 +256,8 @@ handle_roll(  Tid,
                   true  -> printnameln("B has a valid move")
                 end,
 
-                NewPlayerBScore = score_logic(ScorecardBChoice, lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
+                NewPlayerBScore = score_logic(ScorecardBChoice,
+                  lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
 
                 NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
                         [NewPlayerBScore] ++ 
@@ -237,23 +271,27 @@ handle_roll(  Tid,
                 TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
                 TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-                handle_roll(  Tid, 
-                        Gid, 
-                        Roll+1, 
-                        PlayerAName, PlayerBName, 
-                        NewScorecardA, NewScorecardB, 
-                        DieOutcomesA, DieOutcomesB, 
-                        PlayerANode, PlayerBNode, 
-                        DiceToKeepA, DiceToKeepB);
+                handle_roll(
+                  Tid, 
+                  Gid, 
+                  Roll+1, 
+                  PlayerAName, PlayerBName, 
+                  NewScorecardA, NewScorecardB, 
+                  DieOutcomesA, DieOutcomesB, 
+                  PlayerANode, PlayerBNode, 
+                  DiceToKeepA, DiceToKeepB
+                );
               true -> 
-                handle_roll(  Tid, 
-                        Gid, 
-                        Roll+1, 
-                        PlayerAName, PlayerBName, 
-                        PlayerAScoreCard, PlayerBScoreCard, 
-                        DieOutcomesA, DieOutcomesB, 
-                        PlayerANode, PlayerBNode, 
-                        DiceToKeepA, DiceToKeepB)
+                handle_roll(
+                  Tid, 
+                  Gid, 
+                  Roll+1, 
+                  PlayerAName, PlayerBName, 
+                  PlayerAScoreCard, PlayerBScoreCard, 
+                  DieOutcomesA, DieOutcomesB, 
+                  PlayerANode, PlayerBNode, 
+                  DiceToKeepA, DiceToKeepB
+                )
               end;
             InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
           end;
@@ -274,7 +312,8 @@ handle_roll(  Tid,
                     true  -> printnameln("A has a valid move")
                   end,
 
-                  NewPlayerAScore = score_logic(ScorecardAChoice, lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
+                  NewPlayerAScore = score_logic(ScorecardAChoice,
+                    lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
 
                   %Mark A's score card
                   NewScorecardA = element(1, lists:split(ScorecardAChoice-1, PlayerAScoreCard)) ++ 
@@ -293,7 +332,8 @@ handle_roll(  Tid,
                     true  -> printnameln("B has a valid move")
                   end,
 
-                  NewPlayerBScore = score_logic(ScorecardBChoice, lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
+                  NewPlayerBScore = score_logic(ScorecardBChoice,
+                    lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
 
                   NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
                           [NewPlayerBScore] ++ 
@@ -330,11 +370,6 @@ handle_roll(  Tid,
         InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
       end
     end.
-
-
-
-
-
 
 
 checkIfYahtzeeBonusApplicable(Die, Scorecard) ->
@@ -387,7 +422,9 @@ generate_fixed_length_lists(Type, Count) ->
     end;
   true -> 
     if Count == 0 -> [];
-      true -> [element(1, random:uniform_s(?DIESTATE, random:seed(now())))] ++ generate_fixed_length_lists(Type, Count-1)
+      true ->
+        [element(1, random:uniform_s(?DIESTATE, random:seed(now())))] ++
+        generate_fixed_length_lists(Type, Count-1)
     end
   end.
 
