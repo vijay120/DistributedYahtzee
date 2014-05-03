@@ -62,16 +62,17 @@ referee_main(Params) ->
   printnameln("Player A tuple is ~p", [PlayerATuple]),
   printnameln("Player B tuple is ~p", [PlayerBTuple]),
   TournamentId = hd(tl(tl(Params))),
+  GamesPerMatch = hd(tl(tl(tl(Params)))),
 
   net_kernel:start([list_to_atom(Reg_name), shortnames]),
 
   printnameln("My node is ~p", [node()]),
   printnameln("My pid is ~p", [self()]),
   register(referee, self()),
-  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId).
+  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch).
 
 
-findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
+findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch) ->
   GameId = self(),
   PlayerAPid = element(?PID, PlayerATuple),
   PlayerAName = element(?USERNAME, PlayerATuple),
@@ -84,17 +85,60 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
   timer:sleep(100),
   ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
   ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
-  handle_game(
-    ?FIRSTROUND, 
-    TournamentId, 
-    GameId, 
-    PlayerAName, PlayerBName, 
-    ScorecardA, ScorecardB, 
-    PlayerANode, PlayerBNode,
-    ?NOWINS, ?NOWINS
-  ).
 
-%This function handles all the logic and enforcement of rukes
+  handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+               ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 0, 0, 0, false).
+
+% ConsecutiveTies: The number of games the two players have tied in a row.
+% PlayerAWins and PlayerBWins are integers--the number of games won so far in the match.
+handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+             ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+             ConsecutiveTies, PlayerAWins, PlayerBWins, IsStandard) ->
+  if
+    PlayerAWins > ((GamesPerMatch div 2) + 1) ->
+      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
+      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+      UserRecords = [UserRecordA, UserRecordB],
+      TournamentId ! {report_game_results, self(), {UserRecords, PlayerAName}};
+
+    PlayerBWins > ((GamesPerMatch div 2) + 1) ->
+      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
+      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+      UserRecords = [UserRecordA, UserRecordB],
+      TournamentId ! {report_game_results, self(), {UserRecords, PlayerBName}};
+
+    ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
+      handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, 0, 0, true);
+
+    true ->
+      Winner = handle_game(?FIRSTROUND, 
+                            TournamentId, 
+                            GameId, 
+                            PlayerAName, PlayerBName, 
+                            ScorecardA, ScorecardB, 
+                            PlayerANode, PlayerBNode,
+                            IsStandard),
+      if
+        Winner == PlayerAName ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, PlayerAWins+1, PlayerBWins, IsStandard);
+        Winner == PlayerBName ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, PlayerAWins, PlayerBWins+1, IsStandard);
+        Winner == tie ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       ConsecutiveTies+1, PlayerAWins, PlayerBWins, IsStandard);
+        true ->
+          printnameln("Winner is neither player nor tie, it is: ~p", [Winner])
+      end
+  end.
+
+%This function handles all the logic and enforcement of rules
 score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
   if ScoreCardChoice < ?UPPERCARDS ->
     yahtzee_player1:calcUpper(DiceGiven, ScoreCardChoiceValue, ScoreCardChoice);
@@ -110,7 +154,6 @@ score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
     end
   end.
 
-
 handle_game(
   Round,
   Tid, 
@@ -118,34 +161,51 @@ handle_game(
   PlayerAName, PlayerBName, 
   PlayerAScoreCard, PlayerBScoreCard, 
   PlayerANode, PlayerBNode,
-  PlayerAWins, PlayerBWins
+  IsStandard
 ) ->  
   printnameln("In handle game"),
 
   if Round > 13 -> 
-      printnameln("Game stats: PlayerAWins = ~p, PlayerBWins = ~p",
-        [PlayerAWins, PlayerBWins]),
+      TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
+      TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
+
+      printnameln("Game stats: PlayerAScore = ~p, PlayerBScore = ~p",
+        [TotalScoreForA, TotalScoreForB]),
       printnameln("Game is done!"),
-      {UserRecords, Winner} = case PlayerAWins > PlayerBWins of
-        true ->
-          UserRecordA = {PlayerAName, 1, 0},
-          UserRecordB = {PlayerBName, 0, 1},
-          {[UserRecordA, UserRecordB], PlayerAName};
-        false ->
-          UserRecordA = {PlayerAName, 0, 1},
-          UserRecordB = {PlayerBName, 1, 0},
-          {[UserRecordA, UserRecordB], PlayerBName}
-      end,
-      Tid ! {report_game_results, self(), {Tid, UserRecords, Winner}};
+
+      {UserRecords, Winner} = if 
+        TotalScoreForA > TotalScoreForB -> 
+          PlayerAName;
+          % UserRecordA = {PlayerAName, 1, 0},
+          % UserRecordB = {PlayerBName, 0, 1},
+          % {[UserRecordA, UserRecordB], PlayerAName};
+        TotalScoreForA == TotalScoreForB -> 
+          tie;
+          % UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
+          % UserRecordB = {PlayerBName, 0, 0},
+          % {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
+        TotalScoreForA < TotalScoreForB ->
+          PlayerBName
+          % UserRecordA = {PlayerAName, 0, 1},
+          % UserRecordB = {PlayerBName, 1, 0},
+          % {[UserRecordA, UserRecordB], PlayerBName}
+      end;
+      % Tid ! {report_game_results, self(), {UserRecords, Winner}};
   true -> 
     random:seed(now()),
     timer:sleep(100),
-    DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
-    DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+    if
+      IsStandard ->
+        DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+        DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES);
+      true ->
+        DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+        DieOutcomesB = DieOutcomesA
+    end,
     ChoiceA = ?INITIALDIECHOICE,
     ChoiceB = ?INITIALDIECHOICE,
 
-    [NewPlayerAScoreCard, NewPlayerBScoreCard, InPlayerAWin, InPlayerBWin] =
+    [NewPlayerAScoreCard, NewPlayerBScoreCard] =
       handle_roll(
         Tid, 
         Gid, 
@@ -156,8 +216,6 @@ handle_game(
         PlayerANode, PlayerBNode, 
         ChoiceA, ChoiceB
       ),
-    NewPlayerAWins = PlayerAWins + InPlayerAWin,
-    NewPlayerBWins = PlayerBWins + InPlayerBWin,
 
     handle_game(
       Round + 1,
@@ -166,7 +224,7 @@ handle_game(
       PlayerAName, PlayerBName, 
       NewPlayerAScoreCard, NewPlayerBScoreCard,
       PlayerANode, PlayerBNode,
-      NewPlayerAWins, NewPlayerBWins
+      IsStandard
     )
   end.
 
@@ -191,10 +249,7 @@ handle_roll(
     TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
     TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-    if TotalScoreForA > TotalScoreForB -> [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
-      true ->
-        [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
-    end;
+    [PlayerAScoreCard, PlayerBScoreCard];
 
     true ->
       %Step 1: Calculate the dies that need to be send for each player
@@ -217,6 +272,7 @@ handle_roll(
         {play_request, self(), PlayerBName,
           {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
       printnameln("After message sent"),
+
       %Recieve for player A only
       receive
         {play_action, _, PlayerAName, {_, _, _, _, DiceToKeepA, ScorecardAChoice}} -> 
@@ -348,34 +404,29 @@ handle_roll(
                   TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
                   TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-                  handle_roll(
-                    Tid, 
-                    Gid, 
-                    Roll + 1, 
-                    PlayerAName, PlayerBName, 
-                    NewScorecardA, NewScorecardB, 
-                    DieOutcomesA, DieOutcomesB, 
-                    PlayerANode, PlayerBNode, 
-                    DiceToKeepA, DiceToKeepB
-                  );
+                  handle_roll(  Tid, 
+                          Gid, 
+                          Roll+1, 
+                          PlayerAName, PlayerBName, 
+                          NewScorecardA, NewScorecardB, 
+                          DieOutcomesA, DieOutcomesB, 
+                          PlayerANode, PlayerBNode, 
+                          DiceToKeepA, DiceToKeepB);
                 true -> 
-                  handle_roll(
-                    Tid, 
-                    Gid, 
-                    Roll+1, 
-                    PlayerAName, PlayerBName, 
-                    PlayerAScoreCard, PlayerBScoreCard, 
-                    DieOutcomesA, DieOutcomesB, 
-                    PlayerANode, PlayerBNode, 
-                    DiceToKeepA, DiceToKeepB
-                  )
+                  handle_roll(  Tid, 
+                          Gid, 
+                          Roll+1, 
+                          PlayerAName, PlayerBName, 
+                          PlayerAScoreCard, PlayerBScoreCard, 
+                          DieOutcomesA, DieOutcomesB, 
+                          PlayerANode, PlayerBNode, 
+                          DiceToKeepA, DiceToKeepB)
                 end;
               InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
             end;
         InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
       end
     end.
-
 
 
 checkIfYahtzeeBonusApplicable(Die, Scorecard) ->
@@ -408,7 +459,7 @@ send_die_from_choice(DieSequence, Choice, Roll, CurrentIndex, AccumulatedDieSeq)
     Boolean = lists:nth(CurrentIndex, Choice),
     if Boolean == false -> 
       % printnameln("The die sequence inside the if statement is ~p", [DieSequence]),
-      NextIndex = CurrentIndex*(Roll - 1) + ?NEXTDIE,
+      NextIndex = CurrentIndex*(Roll-1) + ?NEXTDIE,
       % printnameln("The next index is: ~p", [NextIndex]),
       Problem = lists:nth(NextIndex, DieSequence),
       % printnameln("Problem is: ~p", [Problem]),
