@@ -14,7 +14,7 @@
 %% ====================================================================
 %%                             Constants
 %% ====================================================================
--define(GLOBALNAME, "YahtzeePlayer1").
+-define(GLOBALNAME, "YahtzeePlayer").
 -define(TIMEOUT, 2000).
 
 -define(ACES, 1).

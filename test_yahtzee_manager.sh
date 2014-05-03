@@ -3,6 +3,7 @@ erlc yahtzee_manager.erl
 erlc tournament_manager.erl
 erlc referee.erl
 erlc yahtzee_player1.erl
+erlc yahtzee_player2.erl
 erlc shuffle.erl
 set +o verbose
 # echo "==== SLEEP FOR 3 SECONDS ^-- see above compile results to see if there are any errors ================"

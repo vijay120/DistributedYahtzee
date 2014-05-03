@@ -62,12 +62,14 @@ referee_main(Params) ->
   printnameln("Player B tuple is ~p", [PlayerBTuple]),
   TournamentId = hd(tl(tl(Params))),
   GamesPerMatch = hd(tl(tl(tl(Params)))),
+  printnameln("READMEEOIN"),
+  printnameln("GamesPerMatch is: ~p", [GamesPerMatch]),
 
   net_kernel:start([list_to_atom(Reg_name), shortnames]),
 
   printnameln("My node is ~p", [node()]),
   printnameln("My pid is ~p", [self()]),
-  register(referee, self()),
+  % register(referee, self()),
   findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch).
 
 
@@ -95,14 +97,14 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
              ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
              ConsecutiveTies, PlayerAWins, PlayerBWins, IsStandard) ->
   if
-    PlayerAWins > ((GamesPerMatch div 2) + 1) ->
-      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
-      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+    PlayerAWins > (GamesPerMatch div 2) ->
+      UserRecordA = {PlayerAName, 1, 0},
+      UserRecordB = {PlayerBName, 0, 1},
       UserRecords = [UserRecordA, UserRecordB],
       TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerAName}};
-    PlayerBWins > ((GamesPerMatch div 2) + 1) ->
-      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
-      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+    PlayerBWins > (GamesPerMatch div 2) ->
+      UserRecordA = {PlayerAName, 0, 1},
+      UserRecordB = {PlayerBName, 1, 0},
       UserRecords = [UserRecordA, UserRecordB],
       TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerBName}};
     ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
