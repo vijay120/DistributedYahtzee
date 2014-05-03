@@ -65,6 +65,15 @@ main(Params) ->
   listen(TournamentStatuses, UserTables).
 
 
+monitor_pid(ChildPid, ParentPid, Username, LoginTicket) ->
+
+  erlang:monitor(process, ChildPid), %{RegName, Node}
+    receive
+      {'DOWN', Ref, process, Pid,  _Reason} ->
+        printnameln("Process ~p with Ref ~p crashed! Automatically logout.", [Pid, Ref]),
+        ParentPid ! {logout, Pid, Username, {LoginTicket}}
+    end.
+
 listen(TournamentStatuses, UserTables) ->
   printnameln("=========================================="),
   printnameln("TournamentStatuses = ~p", [TournamentStatuses]),
@@ -216,9 +225,12 @@ listen(TournamentStatuses, UserTables) ->
             LoginTicket = make_ref(),
             NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, 0,0,0,0},
             NewUserTables = [NewRecord | UserTables],
-            Pid ! {logged_in, self(), Username, {LoginTicket}},
+            SelfPid = self(),
+            Pid ! {logged_in, SelfPid, Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]),
+            printnameln("Start monitoring..."),
+            spawn(fun() ->  monitor_pid(Pid, SelfPid, Username, LoginTicket) end),
             printnameln("");
 
           {_, Nodename, Username, Password, LoginTicket, _, MatchWins, MatchLosses,
@@ -228,9 +240,12 @@ listen(TournamentStatuses, UserTables) ->
                          MatchLosses, TournamentsPlayed, TournamentWins},
             % TODO: Do lists:keyreplace instead of just insert | To Eoin, I fixed this. Can you double check? - Tum
             NewUserTables = lists:keyreplace(Username, ?USERNAME, UserTables, NewRecord),
-            Pid ! {logged_in, self(), Username, {LoginTicket}},
+            SelfPid = self(),
+            Pid ! {logged_in, SelfPid, Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]),
+            printnameln("Start monitoring..."),
+            spawn(fun() ->  monitor_pid(Pid, SelfPid, Username, LoginTicket) end),
             printnameln("");
 
           {UserPid, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
