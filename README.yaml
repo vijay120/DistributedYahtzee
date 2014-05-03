@@ -56,8 +56,8 @@ TODO:
 		- tournament_manager: design a bracket and keep track
 		- referee: extend statistics report to take the sum of match wins, etc
 	[/] standard yahtzee
-	- implement best-of-x
-		- ignore game-per-match k when k is not a positive odd number
+	[/] implement best-of-x
+		[/] ignore game-per-match k when k is not a positive odd number
 
 
 Questions to ask
