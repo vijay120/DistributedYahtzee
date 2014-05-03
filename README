@@ -56,6 +56,11 @@ Testing:
 		(notice bye! in the end)
 			https://gist.github.com/vijay120/748c2fcf45cc7315ae72
 
+		4) Test that crashing (by Ctrl + C) will automatically update the status of the player to logout.
+
+		Results in the System Manager:
+			(notice the true (indicating the player is logged-in) changes to false)
+			https://gist.github.com/tummykung/864acbfae66a62dce47a
 
 
 

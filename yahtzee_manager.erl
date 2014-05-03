@@ -250,7 +250,7 @@ listen(TournamentStatuses, UserTables) ->
           {UserPid, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
             NewUserTables = UserTables,
             printnameln("Password does not match!"),
-            exit(UserPid, badarg)
+            exit(UserPid, normal)
         end,
 
         listen(TournamentStatuses, NewUserTables);

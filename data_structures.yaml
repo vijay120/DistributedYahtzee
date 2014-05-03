@@ -16,7 +16,7 @@ tournament_manager (tid):
 	- status:
 		- in_progress (atom)
 		- completed (atom)
-	- [gid] (list of referee)
+	- [gid] # (list of referee)
 	- bracket-structure (nested list)
 
 referee/game_manager (gid):
@@ -40,18 +40,22 @@ scorecard ([14 ints]):
 username (string)
 password (string)
 
+UserRecords ([{Username, MatchWins, MatchLosses}]) # every player in tournament
+Winner (Username) # the winner of the tournament)
+
+
 messages:
 	- external_controller -> yahtzee_manager
 		- request_tournament: {request_tournament, Pid, {NumPlayers, GamesPerMatch}}
-			->> The player list is aggregated from currently loggin Player. 
-			->> yahtzee_manager spawns a new tournament_manager for this tournament.
-			->> tournament_manager sends start_tournament to each player.
-			->> tournament_manager waits to get responses from all players.
-			->> If a player sends an accept_tournament, awesome! tournament_manager counts it in.
-			->> If a player sends an reject_tournament, too bad! tournament_manager replaces it with a bye.
-			(in future iterations, it might try to find a new player, and replace by a bye only after a timeout)
-			->> When all players replied, tournament_manager sends tournament_started
-				to the requesting external_controller.
+			# ->> The player list is aggregated from currently loggin Player. 
+			# ->> yahtzee_manager spawns a new tournament_manager for this tournament.
+			# ->> tournament_manager sends start_tournament to each player.
+			# ->> tournament_manager waits to get responses from all players.
+			# ->> If a player sends an accept_tournament, awesome! tournament_manager counts it in.
+			# ->> If a player sends an reject_tournament, too bad! tournament_manager replaces it with a bye.
+			# (in future iterations, it might try to find a new player, and replace by a bye only after a timeout)
+			# ->> When all players replied, tournament_manager sends tournament_started
+			# 	to the requesting external_controller.
 		- tournament_info: {tournament_info, Pid, {TournamentId}}
 		- user_info: {user_info, Pid, {Username}}
 	- yahtzee_manager -> external_controller

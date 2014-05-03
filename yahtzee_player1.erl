@@ -35,7 +35,7 @@
 %%                            Main Function
 %% ====================================================================
 main(Params) ->
-	printnameln("In main"),
+	process_flag(trap_exit, true),
 	%set up network connections
 	os:cmd("epmd -daemon"),
 	RegName =     hd(Params),
