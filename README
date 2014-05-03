@@ -1,17 +1,24 @@
 Names: Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
 
+NOTE: yahtzee_player1.erl is intelligent, yahtzee_player2.erl is
+dumb but quicker to run if you want to test a larger tournament.
+If you are inserting us in a competition with other players,
+please pick yahtzee_player1. Or both. My money's on player1 though.
 
 Reflections:
-- Design
-	- Good.
 
-- Implementation
+This assignment was longer than expected, and we expected it to be long.
+There were just a lot of different things to implement, a lot of small
+errors, bugs, inconsistencies, etc. that took a long time to debug,
+especially because the end result is so large.
 
+We liked the fact that we as a class created the protocol and we like
+the way we split the work between different types of processes 
+(meaning our refs, players, tournament manager, and system manager).
 
-
-referee API:
-
-
+We could've done with more time (or it being at a better time of year),
+especially for organizing the code/coordinating everything between
+people. 
 
 Testing:
 

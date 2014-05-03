@@ -39,12 +39,10 @@
 %% ====================================================================
 % The tournament_main/1 function.
 tournament_main(Params) ->
-  % The only parameter is the name of the node to register. This
-  % should be a lowercase ASCII string with no periods or @ signs.
   ExternalControllerPid = hd(Params),        % <eid>
   YahtzeeManagerPid =     hd(tl(Params)),        % <yid>
   NodeName = list_to_atom(hd(tl(tl(Params)))),
-  NumPlayers =            hd(tl(tl(tl(Params)))),
+  _NumPlayers =            hd(tl(tl(tl(Params)))),
   GamesPerMatch =         hd(tl(tl(tl(tl(Params))))),
   Players =               tl(tl(tl(tl(tl(Params))))),
   Usernames = lists:map(fun(Player) -> element(?USERNAME, Player) end, Players),
@@ -53,21 +51,17 @@ tournament_main(Params) ->
   register(NodeName, self()),
   printnameln("Registered with the process name = ~p, nodename = ~p, pid = ~p",
     [NodeName, node(), self()]),
-  RefereeGids = [],
   OptionalData = [],
   Tid = self(),
   UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
 
-  printnameln("README"),
   printnameln("Players are: ~p", [Players]),
   printnameln("GamesPerMatch are: ~p", [GamesPerMatch]),
 
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
   ActiveUsernames = wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
-  % printnameln("ActiveUsernames are: ~p", [ActiveUsernames]),
   ActivePlayers = lists:map(fun(ActiveUsername) -> lists:keyfind(ActiveUsername, ?USERNAME, Players) end, ActiveUsernames),
   playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, ActivePlayers, []).
-  % play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
 
 %% ====================================================================
@@ -114,7 +108,7 @@ receiveResults(NumWinners, Winners, Records, UserTables) ->
       {Winners, Records};
     true -> % otherwise, listen for more!
       receive
-        {report_match_results, Pid, {Tid, UserRecords, Winner}} ->
+        {report_match_results, _Pid, {_Tid, UserRecords, Winner}} ->
           printnameln("Received match results"),
           % update records
           NewRecords = mergeRecords(UserRecords, Records),
@@ -142,21 +136,9 @@ mergeRecords(UserRecords, Records) ->
       {_, NewMatchWins, NewMatchLosses} = UserRecord,
       NewRecord = {Username, ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses},
       NewRecords = lists:keyreplace(Username, ?RECORD_USERNAME, Records, NewRecord), % replace record with updated stats
-      mergeRecords(tl(UserRecords), NewRecords);
-
-    % {Pid, Node, Username, Password, LoginTicket, IsLogin, 
-    %  ExistingMatchWins, ExistingMatchLosses, TournamentsPlayed, TournamentWins} ->
-    %   {_,_,_,_,_,_,NewMatchWins, NewMatchLosses,_,_} = UserRecord,
-
-    %   NewRecord = {Pid, Node, Username, Password, LoginTicket, IsLogin,
-    %                ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses, 
-    %                TournamentsPlayed, TournamentWins},
-
-      
+      mergeRecords(tl(UserRecords), NewRecords);      
       
     BadResult ->
-      printnameln("Just prior to bad tings"),
-      timer:sleep(500),
       printnameln("BadResult is: ~p", [BadResult])
   end.
 
@@ -246,25 +228,6 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
     end,
   wait_for_all_players(ExternalControllerPid, NewWaitingUserTickets, NewUserNames, OptionalData).
 
-
-play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
-  receive
-      {report_match_results, Pid, {Tid, UserRecords, Winner}} ->
-        printnameln("Received the report_match_results message."),
-        printnameln("This is the last match, so I will send a report_tournament_results message."),
-        YahtzeeManagerPid ! {report_tournament_results, Pid, {Tid, UserRecords, Winner}};
-
-      BadMessage ->
-        printnameln("Bad message: ~p", [BadMessage])
-  end,
-  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData);
-
-play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData) ->
-  receive
-      BadMessage ->
-        printnameln("Bad message: ~p", [BadMessage])
-  end,
-  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, completed, RefereeGids, OptionalData).
 
 %% ====================================================================
 %%                       Pretty Print Functions

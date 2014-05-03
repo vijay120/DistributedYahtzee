@@ -194,23 +194,16 @@ handle_game(
         TotalScoreForA > TotalScoreForB -> 
           printnameln("~p wins!", [PlayerAName]),
           PlayerAName;
-          % UserRecordA = {PlayerAName, 1, 0},
-          % UserRecordB = {PlayerBName, 0, 1},
-          % {[UserRecordA, UserRecordB], PlayerAName};
+
         TotalScoreForA == TotalScoreForB -> 
           printnameln("Both players tie"),
           tie;
-          % UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
-          % UserRecordB = {PlayerBName, 0, 0},
-          % {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
+
         TotalScoreForA < TotalScoreForB ->
           printnameln("~p wins", [PlayerBName]),
           PlayerBName
-          % UserRecordA = {PlayerAName, 0, 1},
-          % UserRecordB = {PlayerBName, 1, 0},
-          % {[UserRecordA, UserRecordB], PlayerBName}
       end;
-      % Tid ! {report_match_results, self(), {UserRecords, Winner}};
+
   true -> 
     random:seed(now()),
     timer:sleep(100),
@@ -237,8 +230,6 @@ handle_game(
         ChoiceA, ChoiceB
       ),
 
-      
-
     handle_game(
       Round + 1,
       Tid, 
@@ -250,7 +241,7 @@ handle_game(
     )
   end.
 
-  
+
 handle_roll(
   Tid, 
   Gid, 
@@ -264,19 +255,8 @@ handle_roll(
 
   if Roll > 3 ->
     %The last roll is over, so pass the results to the tournament manager
-    % printnameln("Player A's score is: ~p", [PlayerAScore]),
-    % printnameln("Player B's score is: ~p", [PlayerBScore]),
-    _TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
-    _TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
     [PlayerAScoreCard, PlayerBScoreCard, false, false];
-    % if
-    %   TotalScoreForA > TotalScoreForB ->
-    %    [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
-    %   true ->
-    %     [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
-    % end;
-
 
     true ->
       %Step 1: Calculate the dies that need to be send for each player
@@ -440,9 +420,6 @@ end.
 
 %this method is used to find the next roll to die to pass on to the players
 send_die_from_choice(DieSequence, Choice, Roll, CurrentIndex, AccumulatedDieSeq) ->
-  % printnameln("The die sequence is ~p", [DieSequence]),
-  % printnameln("The current index is ~p", [CurrentIndex]),
-  % printnameln("The choice is ~p", [Choice]),
   if  CurrentIndex > length(Choice) -> AccumulatedDieSeq;
   true -> 
     Boolean = lists:nth(CurrentIndex, Choice),

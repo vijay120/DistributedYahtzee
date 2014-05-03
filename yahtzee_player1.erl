@@ -151,12 +151,9 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 		true -> % get expected value of keeping each permutation of die
 			[KeepScore, KeepMove] = bestMove(Dice, Scorecard),
 			KeepAllDice = [true, true, true, true, true],
-			% printnameln("KeepScore: ~p, KeepMove: ~p", [KeepScore, KeepMove]),
 			AllDiceChanges = fixFlatten(lists:flatten(generateDiceChanges(5, [])), []), % gets 2^5 lists of all dice keep/change
-			% printnameln("AllDiceChanges: ~p", [AllDiceChanges]),
 			% gets the expected score for all possible dice change configurations
 			ExpectedScores = lists:map(fun(X) -> getExpectedScore(X, Dice, Scorecard) end, AllDiceChanges),
-			% printnameln("ChangesScores are: ~p", [ExpectedScores]),
 			MaxExpectedScore = lists:max(ExpectedScores),
 			if
 				MaxExpectedScore > KeepScore -> % then we use that change
@@ -176,9 +173,7 @@ playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
 % which is the average of all possible configurations that can result from this.
 getExpectedScore(DiceChanges, Dice, Scorecard) ->
 	PossibleDieRolls = fixFlatten(lists:flatten(generateDiceRolls(DiceChanges, Dice, [])), []), % generate all dice rolls
-	% printnameln("PossibleDieRolls are: ~p", [PossibleDieRolls]),
 	ListDieScores = lists:map(fun(X) -> Y = bestMove(X, Scorecard), lists:nth(1, Y) end, PossibleDieRolls),
-	% printnameln("ListDieScores is: ~p", [ListDieScores]),
 	lists:sum(ListDieScores) / length(ListDieScores).
 
 % Gets a flattened list of dice or changes to make,
