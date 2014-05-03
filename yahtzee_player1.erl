@@ -50,7 +50,7 @@ main(Params) ->
 	register(player, self()), % Useful for testing to send message by node name
 
 	% register with all system managers
-	printnameln("Just before global send SysManagers: ~p", [SystManagersAtoms]),
+	printnameln("Just before send SysManagers: ~p", [SystManagersAtoms]),
 	lists:map(fun(X) -> net_kernel:connect_node(X) end, SystManagersAtoms),
 	lists:map(fun(X) -> {yahtzee_manager, X} !
 		{login, self(), node(), {Username, Password}} end, SystManagersAtoms),

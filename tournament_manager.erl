@@ -235,6 +235,8 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
 play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
   receive
       {report_match_results, Pid, {Tid, UserRecords, Winner}} ->
+        printnameln("Received the report_match_results message."),
+        printnameln("This is the last match, so I will send a report_tournament_results message."),
         YahtzeeManagerPid ! {report_tournament_results, Pid, {Tid, UserRecords, Winner}};
 
       BadMessage ->

@@ -10,7 +10,6 @@
 
 -import(tournament_manager, [tournament_main/1]).
 -import(referee, [referee_main/1]).
--import(player, [player_main/1]).
 -import(shuffle, [shuffle/1]).
 %% ====================================================================
 %%                             Public API
@@ -127,7 +126,8 @@ listen(TournamentStatuses, UserTables) ->
             ),
             printnameln("tournament process spawned! Its TID is ~p", [Tid]),
 
-            NewTournamentStatuses = TournamentStatuses ++ [{Tid, in_progress, undefined}], % if in_progress, ignore winner entry
+            % if in_progress, ignore winner entry
+            NewTournamentStatuses = TournamentStatuses ++ [{Tid, in_progress, undefined}],
             listen(NewTournamentStatuses, UserTables);
           false ->
             printnameln("Reject a non positive odd number of GamesPerMatch.")
@@ -229,7 +229,7 @@ listen(TournamentStatuses, UserTables) ->
             Pid ! {logged_in, SelfPid, Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]),
-            printnameln("Start monitoring..."),
+            printnameln("Start monitoring user ~p...", [Username]),
             spawn(fun() ->  monitor_pid(Pid, SelfPid, Username, LoginTicket) end),
             printnameln("");
 
@@ -238,21 +238,19 @@ listen(TournamentStatuses, UserTables) ->
             % re-login
             NewRecord = {Pid, Nodename, Username, Password, LoginTicket, true, MatchWins,
                          MatchLosses, TournamentsPlayed, TournamentWins},
-            % TODO: Do lists:keyreplace instead of just insert | To Eoin, I fixed this. Can you double check? - Tum
             NewUserTables = lists:keyreplace(Username, ?USERNAME, UserTables, NewRecord),
             SelfPid = self(),
             Pid ! {logged_in, SelfPid, Username, {LoginTicket}},
             printnameln("logged_in message sent to ~p with " ++
                 "login-ticket = ~p.", [Pid, LoginTicket]),
-            printnameln("Start monitoring..."),
+            printnameln("Start monitoring user ~p...", [Username]),
             spawn(fun() ->  monitor_pid(Pid, SelfPid, Username, LoginTicket) end),
             printnameln("");
 
           {UserPid, _, Username, _,_,_,_,_,_,_} -> % without pattern matching password/node name
-            LoginTicket = make_ref(),
             NewUserTables = UserTables,
             printnameln("Password does not match!"),
-            exit(UserPid, badarg) % TODO: What do we do now??
+            exit(UserPid, badarg)
         end,
 
         listen(TournamentStatuses, NewUserTables);
@@ -265,7 +263,7 @@ listen(TournamentStatuses, UserTables) ->
     %     This logs the player out (making them ineligible for
     %       playing in tournaments until they log in again).
 
-    {logout, Pid, Username, {LoginTicket}} ->
+    {logout, Pid, _Username, {LoginTicket}} ->
         % replace LoginStatus with false, update our UserTables.
         printnameln("logout message received from ~p with " ++
             "login-ticket = ~p.", [Pid, LoginTicket]),
