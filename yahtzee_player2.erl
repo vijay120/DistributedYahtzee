@@ -143,34 +143,9 @@ handleMessages(Username, LoginTickets, ActiveTids, IsLoggingOut) ->
 % possible arrangements and choosing the best of those,
 % then sending this reply back to the Pid that sent play_request.
 playMove(Pid, Username, Ref, Tid, Gid, RollNumber, Dice, Scorecard) ->
-	% if
-	% 	RollNumber == 3 -> % if on last roll, just give the best move we can do.
-			[_, Move] = bestMove(Dice, Scorecard),
-			KeepAllDice = [true, true, true, true, true],
-			Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, Move}}.
-	% 	true -> % get expected value of keeping each permutation of die
-	% 		[KeepScore, KeepMove] = bestMove(Dice, Scorecard),
-	% 		KeepAllDice = [true, true, true, true, true],
-	% 		% printnameln("KeepScore: ~p, KeepMove: ~p", [KeepScore, KeepMove]),
-	% 		AllDiceChanges = fixFlatten(lists:flatten(generateDiceChanges(5, [])), []), % gets 2^5 lists of all dice keep/change
-	% 		% printnameln("AllDiceChanges: ~p", [AllDiceChanges]),
-	% 		% gets the expected score for all possible dice change configurations
-	% 		ExpectedScores = lists:map(fun(X) -> getExpectedScore(X, Dice, Scorecard) end, AllDiceChanges),
-	% 		% printnameln("ChangesScores are: ~p", [ExpectedScores]),
-	% 		MaxExpectedScore = lists:max(ExpectedScores),
-	% 		if
-	% 			MaxExpectedScore > KeepScore -> % then we use that change
-	% 				Index = indexOf(MaxExpectedScore, ExpectedScores),
-	% 				ChangesToMake = lists:nth(Index, AllDiceChanges),
-	% 				printnameln("MaxExpectedScore is: ~p", [MaxExpectedScore]),
-	% 				printnameln("KeepScore is: ~p", [KeepScore]),
-	% 				printnameln("Changes in die to make are: ~p", [ChangesToMake]), % KeepMove doesn't actually matter here
-	% 				Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, ChangesToMake, KeepMove}};
-	% 			true ->
-	% 				printnameln("Best move is: ~p", [KeepMove]), 
-	% 				Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, KeepMove}}
-	% 		end
-	% end.
+	[_, Move] = bestMove(Dice, Scorecard),
+	KeepAllDice = [true, true, true, true, true],
+	Pid ! {play_action, self(), Username, {Ref, Tid, Gid, RollNumber, KeepAllDice, Move}}.
 
 % Given a particular set of changes, dice and scorecard, calculates the expected value of those changes,
 % which is the average of all possible configurations that can result from this.

@@ -21,11 +21,13 @@
 -define(DIESTATE, 6).
 -define(SCORECARDROWS, 13).
 -define(NUMPOSSIBLEDIEOUTCOMES, 15).
+
 -define(NEXTDIE, 5).
 -define(STARTINDEX, 1).
 -define(FIRSTROUND, 1).
 -define(FIRSTROLL, 1).
 -define(INITIALSCORE, -12).
+
 -define(THREEKIND, 7).
 -define(FOURKIND, 8).
 -define(FULLHOUSE, 9).
@@ -33,12 +35,15 @@
 -define(LARGESTRAIGHT, 11).
 -define(YAHTZEE, 12).
 -define(CHANCE, 13).
+
 -define(UPPERCARDS, 7).
 -define(INITIALDIECHOICE, [true, true, true, true, true]).
 -define(YAHTZEEINDEX, 12).
 -define(BONUSINDEX, 14).
+
 -define(NOWINS, 0).
 -define(TIMEOUT, 60000).
+
 -define(PID, 1).
 -define(NODE, 2).
 -define(USERNAME, 3).
