@@ -89,6 +89,7 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch) 
   handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 0, 0, 0, false).
 
+% Handles a match, reverting to standard yahtzee rules if needed.
 % ConsecutiveTies: The number of games the two players have tied in a row.
 % PlayerAWins and PlayerBWins are integers--the number of games won so far in the match.
 handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
@@ -99,13 +100,13 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_game_results, self(), {UserRecords, PlayerAName}};
+      TournamentId ! {report_match_results, self(), {UserRecords, PlayerAName}};
 
     PlayerBWins > ((GamesPerMatch div 2) + 1) ->
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_game_results, self(), {UserRecords, PlayerBName}};
+      TournamentId ! {report_match_results, self(), {UserRecords, PlayerBName}};
 
     ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
       handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
@@ -119,7 +120,7 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                             PlayerAName, PlayerBName, 
                             ScorecardA, ScorecardB, 
                             PlayerANode, PlayerBNode,
-                            IsStandard),
+                            IsStandard, false),
       if
         Winner == PlayerAName ->
           handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
@@ -133,6 +134,8 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
           handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                        ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
                        ConsecutiveTies+1, PlayerAWins, PlayerBWins, IsStandard);
+        Winner == bye ->
+          TournamentId ! {report_match_results, self(), {[{PlayerAName, 0, 0}, {PlayerBName, 0, 0}], bye}};
         true ->
           printnameln("Winner is neither player nor tie, it is: ~p", [Winner])
       end
@@ -161,10 +164,21 @@ handle_game(
   PlayerAName, PlayerBName, 
   PlayerAScoreCard, PlayerBScoreCard, 
   PlayerANode, PlayerBNode,
-  IsStandard
+  IsStandard, IsBye
 ) ->  
   printnameln("In handle game"),
-  if Round > 13 -> 
+
+  if 
+    PlayerAName == bye -> % If first is bye, other wins.
+      PlayerBName;
+
+    PlayerBName == bye -> % If second a bye, other wins.
+      PlayerAName;
+
+    IsBye == true ->
+      bye;
+
+    Round > 13 -> 
       TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
       TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
@@ -172,7 +186,7 @@ handle_game(
         [TotalScoreForA, TotalScoreForB]),
       printnameln("Game is done!"),
 
-      {UserRecords, Winner} = if 
+      if 
         TotalScoreForA > TotalScoreForB -> 
           PlayerAName;
           % UserRecordA = {PlayerAName, 1, 0},
@@ -189,7 +203,7 @@ handle_game(
           % UserRecordB = {PlayerBName, 1, 0},
           % {[UserRecordA, UserRecordB], PlayerBName}
       end;
-      % Tid ! {report_game_results, self(), {UserRecords, Winner}};
+      % Tid ! {report_match_results, self(), {UserRecords, Winner}};
   true -> 
     random:seed(now()),
     timer:sleep(100),
@@ -225,7 +239,7 @@ handle_game(
       PlayerAName, PlayerBName, 
       NewPlayerAScoreCard, NewPlayerBScoreCard,
       PlayerANode, PlayerBNode,
-      IsStandard
+      IsStandard, IsBye
     )
   end.
 
