@@ -134,7 +134,7 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                        ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
                        ConsecutiveTies+1, PlayerAWins, PlayerBWins, IsStandard);
         Winner == bye ->
-          TournamentId ! {report_match_results, self(), {[{PlayerAName, 0, 0}, {PlayerBName, 0, 0}], bye}};
+          TournamentId ! {report_match_results, self(), {TournamentId, [{PlayerAName, 0, 0}, {PlayerBName, 0, 0}], bye}};
         true ->
           printnameln("Winner is neither player nor tie, it is: ~p", [Winner])
       end

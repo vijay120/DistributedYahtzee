@@ -341,22 +341,29 @@ listen(TournamentStatuses, UserTables) ->
         % Update usertables with new stats from all players in tournament.
         UpdatedUserTables = updateUserTables(UserRecords, UserTables),
 
-        {WinnerPid, WinnerNodename, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
-          WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon} = 
-          lists:keyfind(Winner, ?USERNAME, UpdatedUserTables), % update winner with tourney win separately
+        if
+          Winner == bye ->
+            NewUserTables = UserTables;
 
-        NewWinnerRecord = {
-          WinnerPid, WinnerNodename, Winner, WinnerPassword,
-          WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
-          WinnerMatchLosses, WinnerTourneysPlayed,
-          WinnerTourneysWon + 1
-        },
+          true ->
+            {WinnerPid, WinnerNodename, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+              WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon} = 
+              lists:keyfind(Winner, ?USERNAME, UpdatedUserTables), % update winner with tourney win separately
 
+            NewWinnerRecord = {
+              WinnerPid, WinnerNodename, Winner, WinnerPassword,
+              WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+              WinnerMatchLosses, WinnerTourneysPlayed,
+              WinnerTourneysWon + 1
+            },
+
+            NewUserTables = lists:keyreplace(Winner, ?USERNAME, UpdatedUserTables, NewWinnerRecord)
+        end,
+        
         ThisTournamentStatus = lists:keyfind(Tid, ?TID, TournamentStatuses),
         NewTournamentStatus = setelement(?STATUS, ThisTournamentStatus, completed),
         NewTournamentStatuses = lists:keyreplace(Tid, ?TID, TournamentStatuses, NewTournamentStatus),
 
-        NewUserTables = lists:keyreplace(Winner, ?USERNAME, UpdatedUserTables, NewWinnerRecord),
         listen(NewTournamentStatuses, NewUserTables);
 
     %% ==============================================================
