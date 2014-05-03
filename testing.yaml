@@ -1,0 +1,89 @@
+Names: Tum Chaturapruek, Eoin Nugent, Vijay Ramakrishnan
+
+
+Testing scripts (run one in each tab):
+
+	# run the yahtzee_manager -- if you change node_name make sure you change it in every tab.
+	bash test_yahtzee_manager.sh node_name
+	# sanity check
+	bash test_external_controller.sh node_name
+	# spawn players
+	bash test_yahtzee_player.sh 2   vijay1 enugent1 hunter1 node_name@$(hostname -s)
+	bash test_yahtzee_player.sh 2   vijay2 enugent2 hunter2 node_name@$(hostname -s)
+	# request a tournament
+	bash test_external_controller.sh node_name
+	# log enugent1 out
+	bash test_player_controller.sh  vijay1 enugent1
+	# check statistics after the match
+	erl -noshell -run external_controller main node_name@$(hostname -s) user_info enugent2
+	erl -noshell -run external_controller main node_name@$(hostname -s) user_info enugent2
+
+Testing notes:
+	- After running test_external_controller, make sure it halts.
+	- After running test_player_controller, make sure the corresopnding player logs out.
+	- To change parameters about each request_tournament parameters, go inside test_yahtzee_player.sh and test it.
+	- Alternatively, you can run
+		nodename=node_name
+		full_node_name=$nodename@$(hostname -s)
+		MAX_NUMPLAYER=3
+		GAMES_PER_MATCH=3
+		erl -noshell -run external_controller main $full_node_name request_tournament $MAX_NUMPLAYER $GAMES_PER_MATCH
+
+
+Tested:
+[/] login/logout works
+	[/] login with the same username/password
+	[/] login with the a wrong password
+	[/] crashing implies logout
+	[/] logout update the user table
+[/] statistics report
+	[/] user_info with external controller
+	[/] update stats after each match
+[/] 4 players system and statistics updates.
+
+
+
+Sample testing details:
+
+	Testing Referee-Player interactions:
+
+		1) Run the following for a normal (no crashes by either player) match between two players: Gets expected behaviour
+			MachineA (hollyhock): bash test_yahtzee_manager.sh node_name
+			MachineB: bash test_yahtzee_player1.sh vijay1 enugent1 hunter1 node_name@hollyhock
+			MachineC: bash test_yahtzee_player1.sh vijay2 enugent2 hunter2 node_name@hollyhock
+			MachineD:
+						full_node_name=node_name@hollyhock <- change this to machineA's host name whenever
+						erl -noshell -run external_controller main $full_node_name request_tournament 2 5
+
+
+		Results in Referee:
+
+		(notice Game Done! at the end)
+			https://gist.github.com/vijay120/5b884488222c45981b1d
+
+
+		2) Do the following for one player crashing: Gets expected behaviour
+			MachineB: ctrl-c
+
+		Results in Referee:
+
+		(notice Player B winning!)
+			https://gist.github.com/vijay120/cbfeae01df15ff39068f
+
+
+		3) Do the following for both players crashing: Gets expected behaviour
+
+		Results in Referee:
+
+		(notice bye! in the end)
+			https://gist.github.com/vijay120/748c2fcf45cc7315ae72
+
+		4) Test that crashing (by Ctrl + C) will automatically update the status of the player to logout.
+
+		Results in the System Manager:
+			(notice the true (indicating the player is logged-in) changes to false)
+			https://gist.github.com/tummykung/864acbfae66a62dce47a
+
+
+		5) Test login the second time with a wrong password:
+			https://gist.github.com/tummykung/860f17102cbc80739c8f
