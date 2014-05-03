@@ -5,6 +5,9 @@ dumb but quicker to run if you want to test a larger tournament.
 If you are inserting us in a competition with other players,
 please pick yahtzee_player1. Or both. My money's on player1 though.
 
+See Testing.yaml for further instructions on how you can test our code.
+See data_structures.yaml for information on our internal protocol.
+
 Reflections:
 
 This assignment was longer than expected, and we expected it to be long.
