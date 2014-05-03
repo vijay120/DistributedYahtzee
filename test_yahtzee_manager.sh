@@ -10,8 +10,8 @@ set +o verbose
 nodename=$1
 echo "========================================================================="
 full_node_name=$nodename@$(hostname -s)
-echo "nodename = "$nodename
-echo "full_node_name = "$full_node_name
+echo "nodename="$nodename
+echo "full_node_name="$full_node_name
 echo "========================================================================="
 
 set -o verbose

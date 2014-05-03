@@ -100,14 +100,12 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_match_results, self(), {UserRecords, PlayerAName}};
-
+      TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerAName}};
     PlayerBWins > ((GamesPerMatch div 2) + 1) ->
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_match_results, self(), {UserRecords, PlayerBName}};
-
+      TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerBName}};
     ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
       handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
                        ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
@@ -121,6 +119,7 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                             ScorecardA, ScorecardB, 
                             PlayerANode, PlayerBNode,
                             IsStandard, false, false),
+
       if
         Winner == PlayerAName ->
           handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
@@ -135,7 +134,7 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
                        ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
                        ConsecutiveTies+1, PlayerAWins, PlayerBWins, IsStandard);
         Winner == bye ->
-          TournamentId ! {report_match_results, self(), {[{PlayerAName, 0, 0}, {PlayerBName, 0, 0}], bye}};
+          TournamentId ! {report_match_results, self(), {TournamentId, [{PlayerAName, 0, 0}, {PlayerBName, 0, 0}], bye}};
         true ->
           printnameln("Winner is neither player nor tie, it is: ~p", [Winner])
       end

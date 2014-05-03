@@ -10,7 +10,7 @@ set +o verbose
 echo "========================================================================="
 nodename=$1
 full_node_name=$nodename@$(hostname -s)
-echo "full_node_name = "$full_node_name
+echo "full_node_name="$full_node_name
 echo "========================================================================="
 set -o verbose
 erl -noshell -run external_controller main $full_node_name request_tournament 2 1
