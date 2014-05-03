@@ -8,7 +8,7 @@ Reflections:
 - Implementation
 	- Quite good.
 
-Testing Scripts (run in each tab):
+Testing scripts (run one in each tab):
 
 	# run the yahtzee_manager -- if you change node_name make sure you change it in every tab.
 	bash test_yahtzee_manager.sh node_name
@@ -49,10 +49,18 @@ Known bugs:
 	when the node is not the same.
 
 TODO:
-	- monitoring
+	[/] change tournament status at the end
 	- more-than-2-players system
+	[/] a bye mechanism
+	[TUM] monitoring
 		- tournament_manager: design a bracket and keep track
 		- referee: extend statistics report to take the sum of match wins, etc
-	- standard yahtzee
-	- a bye mechanism
-	- ignore game-per-match k when k is not a positive odd number
+	[/] standard yahtzee
+	- implement best-of-x
+		- ignore game-per-match k when k is not a positive odd number
+
+
+Questions to ask
+	- Can we construct a pid from string remotely?
+	- Can we sneak in user@node?
+	- Error messages not halt?

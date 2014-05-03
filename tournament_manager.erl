@@ -54,7 +54,7 @@ tournament_main(Params) ->
   OptionalData = [],
   Tid = self(),
   UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
-  spawn(referee, referee_main, [["referee", Players, Tid]]),
+  spawn(referee, referee_main, [["referee", Players, Tid, GamesPerMatch]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
   wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
   play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
@@ -124,7 +124,7 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
       {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
           printnameln("reject_tournament message received from ~p with " ++
               "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]),
-          {WaitingUserTickets -- [LoginTicket], Usernames -- [Username]};
+          {WaitingUserTickets -- [LoginTicket], (Usernames -- [Username]) ++ [bye]};
       %% ==============================================================
       %%                             Else
       %% ==============================================================
@@ -141,8 +141,8 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
 
 play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
   receive
-      {report_game_results, Pid, {UserRecords, Winner}} ->
-        YahtzeeManagerPid ! {report_game_results, Pid, {UserRecords, Winner}};
+      {report_game_results, Pid, {Tid, UserRecords, Winner}} ->
+        YahtzeeManagerPid ! {report_tournament_results, Pid, {Tid, UserRecords, Winner}};
 
       BadMessage ->
         printnameln("Bad message: ~p", [BadMessage])
