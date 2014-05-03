@@ -293,10 +293,10 @@ handle_roll(
       receive
         {play_action, _, PlayerAName, {_, _, _, _, DiceToKeepA, ScorecardAChoice}} -> 
           %Receive for player B only
-            {player, PlayerBNode} ! {	play_request, 
-            							self(), 
-            							PlayerBName, 
-            							{make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+            {player, PlayerBNode} ! { play_request, 
+                          self(), 
+                          PlayerBName, 
+                          {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
           receive
             {play_action, _, PlayerBName, {_, _, _, _, DiceToKeepB, ScorecardBChoice}} -> 
 
@@ -371,43 +371,43 @@ handle_roll(
                 )
               end;
             InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
-           	after ?TIMEOUT -> 
-           		%Since A is still responding and B timedout, A should win!
-   		         ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
- 				       ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
- 				       %Add more to scorecard B since he/she won!
- 				       IncrementPlayerAScoreBy = 1000,
-        		   NewScorecardA = element(1, lists:split(?BONUSINDEX-1, ScorecardA)) ++ 
-                				      [IncrementPlayerAScoreBy] ++ 
-                				      element(2, lists:split(?BONUSINDEX, ScorecardA)),
+            after ?TIMEOUT -> 
+              %Since A is still responding and B timedout, A should win!
+               ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+               ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+               %Add more to scorecard B since he/she won!
+               IncrementPlayerAScoreBy = 1000,
+               NewScorecardA = element(1, lists:split(?BONUSINDEX-1, ScorecardA)) ++ 
+                              [IncrementPlayerAScoreBy] ++ 
+                              element(2, lists:split(?BONUSINDEX, ScorecardA)),
                 [NewScorecardA, ScorecardB, false, true]
           end;
         InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
 
       after ?TIMEOUT -> 
-      		printnameln("~s timed out", [PlayerAName]),
+          printnameln("~s timed out", [PlayerAName]),
 
-      		%send message to player B
+          %send message to player B
             {player, PlayerBNode} ! {play_request, 
-						  self(), 
-						  PlayerBName, 
-						  {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}
+              self(), 
+              PlayerBName, 
+              {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}
             },
-			      receive
-            	{play_action, _, PlayerBName, {_, _, _, _, _DiceToKeepB, _ScorecardBChoice}} -> 
-            		%Since player B reacted, he/she automatically wins
-            		  	ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
- 	 					        ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
- 	 					        %Add more to scorecard B since he/she won!
- 	 					    IncrementPlayerBScoreBy = 1000,
-                		NewScorecardB = element(1, lists:split(?BONUSINDEX-1, ScorecardB)) ++ 
-                        				[IncrementPlayerBScoreBy] ++ 
-                        				element(2, lists:split(?BONUSINDEX, ScorecardB)),
+            receive
+              {play_action, _, PlayerBName, {_, _, _, _, _DiceToKeepB, _ScorecardBChoice}} -> 
+                %Since player B reacted, he/she automatically wins
+                    ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+                    ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+                    %Add more to scorecard B since he/she won!
+                IncrementPlayerBScoreBy = 1000,
+                    NewScorecardB = element(1, lists:split(?BONUSINDEX-1, ScorecardB)) ++ 
+                                [IncrementPlayerBScoreBy] ++ 
+                                element(2, lists:split(?BONUSINDEX, ScorecardB)),
                         [ScorecardA, NewScorecardB, false, true];
                 _ -> printnameln("Not sure what to do here...")
             after ?TIMEOUT -> 
-                	printnameln("~s timed out", [PlayerBName]),
- 	 				        [ReplacedScoreCardA, ReplacedScoreCardB, true, false]
+                  printnameln("~s timed out", [PlayerBName]),
+                  [ReplacedScoreCardA, ReplacedScoreCardB, true, false]
             end
       end
   end.
