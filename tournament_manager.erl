@@ -54,6 +54,8 @@ tournament_main(Params) ->
   OptionalData = [],
   Tid = self(),
   UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
+  % TODO: For spawning with bye, keep same format as Player Tuple, but have name be bye.
+  % TODO: (Others can be whatever they want.)
   spawn(referee, referee_main, [["referee", Players, Tid, GamesPerMatch]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
   wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
