@@ -62,18 +62,17 @@ referee_main(Params) ->
   printnameln("Player A tuple is ~p", [PlayerATuple]),
   printnameln("Player B tuple is ~p", [PlayerBTuple]),
   TournamentId = hd(tl(tl(Params))),
-  IsStandard = hd(tl(tl(tl(Params)))), % if this is true, play with different sets of die
-
+  GamesPerMatch = hd(tl(tl(tl(Params)))),
 
   net_kernel:start([list_to_atom(Reg_name), shortnames]),
 
   printnameln("My node is ~p", [node()]),
   printnameln("My pid is ~p", [self()]),
   register(referee, self()),
-  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, IsStandard).
+  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch).
 
 
-findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, IsStandard) ->
+findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, GamesPerMatch) ->
   GameId = self(),
   PlayerAPid = element(?PID, PlayerATuple),
   PlayerAName = element(?USERNAME, PlayerATuple),
@@ -87,15 +86,59 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, IsStandard) ->
   ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
   ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
 
-  handle_game(?FIRSTROUND, 
-        TournamentId, 
-        GameId, 
-        PlayerAName, PlayerBName, 
-        ScorecardA, ScorecardB, 
-        PlayerANode, PlayerBNode,
-        IsStandard).
+  handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+               ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 0, 0, 0, false).
 
-%This function handles all the logic and enforcement of rukes
+% ConsecutiveTies: The number of games the two players have tied in a row.
+% PlayerAWins and PlayerBWins are integers--the number of games won so far in the match.
+handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+             ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+             ConsecutiveTies, PlayerAWins, PlayerBWins, IsStandard) ->
+  if
+    PlayerAWins > ((GamesPerMatch div 2) + 1) ->
+      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
+      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+      UserRecords = [UserRecordA, UserRecordB],
+      TournamentId ! {report_game_results, self(), {UserRecords, PlayerAName}};
+
+    PlayerBWins > ((GamesPerMatch div 2) + 1) ->
+      UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
+      UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
+      UserRecords = [UserRecordA, UserRecordB],
+      TournamentId ! {report_game_results, self(), {UserRecords, PlayerBName}};
+
+    ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
+      handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, 0, 0, true);
+
+    true ->
+      Winner = handle_game(?FIRSTROUND, 
+                            TournamentId, 
+                            GameId, 
+                            PlayerAName, PlayerBName, 
+                            ScorecardA, ScorecardB, 
+                            PlayerANode, PlayerBNode,
+                            IsStandard),
+      if
+        Winner == PlayerAName ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, PlayerAWins+1, PlayerBWins, IsStandard);
+        Winner == PlayerBName ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       0, PlayerAWins, PlayerBWins+1, IsStandard);
+        Winner == tie ->
+          handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
+                       ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
+                       ConsecutiveTies+1, PlayerAWins, PlayerBWins, IsStandard);
+        true ->
+          printnameln("Winner is neither player nor tie, it is: ~p", [Winner])
+      end
+  end.
+
+%This function handles all the logic and enforcement of rules
 score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
   if ScoreCardChoice < ?UPPERCARDS ->
     yahtzee_player1:calcUpper(DiceGiven, ScoreCardChoiceValue, ScoreCardChoice);
@@ -129,31 +172,28 @@ handle_game(
       printnameln("Game stats: PlayerAScore = ~p, PlayerBScore = ~p",
         [TotalScoreForA, TotalScoreForB]),
       printnameln("Game is done!"),
-      % TODO: Calculate Total Player A and B scores
 
       {UserRecords, Winner} = if 
         TotalScoreForA > TotalScoreForB -> 
-          UserRecordA = {PlayerAName, 1, 0},
-          UserRecordB = {PlayerBName, 0, 1},
-          {[UserRecordA, UserRecordB], PlayerAName};
-        TotalScoreForA == TotalScoreForB -> % TODO: Two players tied! Replay entire game
-                                        % TODO: with tie counter incremented. If
-                                        % TODO: it reaches a certain point, replay
-                                        % TODO: the game under standard Yahtzee rules?
-          UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
-          UserRecordB = {PlayerBName, 0, 0},
-          {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
+          PlayerAName;
+          % UserRecordA = {PlayerAName, 1, 0},
+          % UserRecordB = {PlayerBName, 0, 1},
+          % {[UserRecordA, UserRecordB], PlayerAName};
+        TotalScoreForA == TotalScoreForB -> 
+          tie;
+          % UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
+          % UserRecordB = {PlayerBName, 0, 0},
+          % {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
         TotalScoreForA < TotalScoreForB ->
-          UserRecordA = {PlayerAName, 0, 1},
-          UserRecordB = {PlayerBName, 1, 0},
-          {[UserRecordA, UserRecordB], PlayerBName}
-      end,
-      Tid ! {report_game_results, self(), {UserRecords, Winner}};
+          PlayerBName
+          % UserRecordA = {PlayerAName, 0, 1},
+          % UserRecordB = {PlayerBName, 1, 0},
+          % {[UserRecordA, UserRecordB], PlayerBName}
+      end;
+      % Tid ! {report_game_results, self(), {UserRecords, Winner}};
   true -> 
     random:seed(now()),
     timer:sleep(100),
-    % TODO EOIN: Shouldn't these be the same list? (Except for when they match, in
-    %            case we do as it is doing?)
     if
       IsStandard ->
         DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
@@ -176,10 +216,6 @@ handle_game(
         PlayerANode, PlayerBNode, 
         ChoiceA, ChoiceB
       ),
-    % NewPlayerAWins = PlayerAWins + InPlayerAWin, % TODO: This should be score, not wins.
-    % NewPlayerBWins = PlayerBWins + InPlayerBWin, % TODO: The only win is at end of game and match.
-    % NewPlayerAScore = PlayerAScore + InPlayerAScore,
-    % NewPlayerBScore = PlayerBScore + InPlayerBScore
 
     handle_game(
       Round + 1,
