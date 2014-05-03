@@ -99,13 +99,13 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_game_results, self(), {UserRecords, PlayerAName}};
+      TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerAName}};
 
     PlayerBWins > ((GamesPerMatch div 2) + 1) ->
       UserRecordA = {PlayerAName, PlayerAWins, PlayerBWins},
       UserRecordB = {PlayerBName, PlayerBWins, PlayerAWins},
       UserRecords = [UserRecordA, UserRecordB],
-      TournamentId ! {report_game_results, self(), {UserRecords, PlayerBName}};
+      TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerBName}};
 
     ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
       handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
@@ -114,12 +114,13 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
 
     true ->
       Winner = handle_game(?FIRSTROUND, 
-                            TournamentId, 
-                            GameId, 
-                            PlayerAName, PlayerBName, 
-                            ScorecardA, ScorecardB, 
-                            PlayerANode, PlayerBNode,
-                            IsStandard),
+        TournamentId, 
+        GameId, 
+        PlayerAName, PlayerBName, 
+        ScorecardA, ScorecardB, 
+        PlayerANode, PlayerBNode,
+        IsStandard
+      ),
       if
         Winner == PlayerAName ->
           handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
@@ -173,7 +174,7 @@ handle_game(
         [TotalScoreForA, TotalScoreForB]),
       printnameln("Game is done!"),
 
-      {UserRecords, Winner} = if 
+       if 
         TotalScoreForA > TotalScoreForB -> 
           PlayerAName;
           % UserRecordA = {PlayerAName, 1, 0},

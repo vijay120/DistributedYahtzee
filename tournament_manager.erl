@@ -141,7 +141,7 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
 
 play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
   receive
-      {report_game_results, Pid, {Tid, UserRecords, Winner}} ->
+      {report_match_results, Pid, {Tid, UserRecords, Winner}} ->
         YahtzeeManagerPid ! {report_tournament_results, Pid, {Tid, UserRecords, Winner}};
 
       BadMessage ->

@@ -11,8 +11,8 @@ echo "========================================================================="
 nodename=$1
 username=$2
 full_node_name=$nodename@$(hostname -s)
-echo "full_node_name = "$full_node_name
-echo "username = "$username
+echo "full_node_name="$full_node_name
+echo "username="$username
 echo "========================================================================="
 set -o verbose
 erl -noshell -run player_controller main $full_node_name please_logout $username
