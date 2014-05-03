@@ -54,7 +54,7 @@ tournament_main(Params) ->
   OptionalData = [],
   Tid = self(),
   UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
-  spawn(referee, referee_main, [["referee", Players, Tid]]),
+  spawn(referee, referee_main, [["referee", Players, Tid, false]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
   wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
   play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).

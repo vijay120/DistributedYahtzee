@@ -62,16 +62,18 @@ referee_main(Params) ->
   printnameln("Player A tuple is ~p", [PlayerATuple]),
   printnameln("Player B tuple is ~p", [PlayerBTuple]),
   TournamentId = hd(tl(tl(Params))),
+  IsStandard = hd(tl(tl(tl(Params)))), % if this is true, play with different sets of die
+
 
   net_kernel:start([list_to_atom(Reg_name), shortnames]),
 
   printnameln("My node is ~p", [node()]),
   printnameln("My pid is ~p", [self()]),
   register(referee, self()),
-  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId).
+  findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, IsStandard).
 
 
-findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
+findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId, IsStandard) ->
   GameId = self(),
   PlayerAPid = element(?PID, PlayerATuple),
   PlayerAName = element(?USERNAME, PlayerATuple),
@@ -90,7 +92,8 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
         GameId, 
         PlayerAName, PlayerBName, 
         ScorecardA, ScorecardB, 
-        PlayerANode, PlayerBNode).
+        PlayerANode, PlayerBNode,
+        IsStandard).
 
 %This function handles all the logic and enforcement of rukes
 score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
@@ -114,7 +117,8 @@ handle_game(
   Gid, 
   PlayerAName, PlayerBName, 
   PlayerAScoreCard, PlayerBScoreCard, 
-  PlayerANode, PlayerBNode
+  PlayerANode, PlayerBNode,
+  IsStandard
 ) ->  
   printnameln("In handle game"),
 
@@ -131,7 +135,7 @@ handle_game(
         TotalScoreForA > TotalScoreForB -> 
           UserRecordA = {PlayerAName, 1, 0},
           UserRecordB = {PlayerBName, 0, 1},
-          {[UserRecordA, UserRecordB], PlayerBName};
+          {[UserRecordA, UserRecordB], PlayerAName};
         TotalScoreForA == TotalScoreForB -> % TODO: Two players tied! Replay entire game
                                         % TODO: with tie counter incremented. If
                                         % TODO: it reaches a certain point, replay
@@ -142,7 +146,7 @@ handle_game(
         TotalScoreForA < TotalScoreForB ->
           UserRecordA = {PlayerAName, 0, 1},
           UserRecordB = {PlayerBName, 1, 0},
-          {[UserRecordA, UserRecordB], PlayerAName}
+          {[UserRecordA, UserRecordB], PlayerBName}
       end,
       Tid ! {report_game_results, self(), {UserRecords, Winner}};
   true -> 
@@ -150,8 +154,14 @@ handle_game(
     timer:sleep(100),
     % TODO EOIN: Shouldn't these be the same list? (Except for when they match, in
     %            case we do as it is doing?)
-    DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
-    DieOutcomesB = DieOutcomesA,
+    if
+      IsStandard ->
+        DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+        DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES);
+      true ->
+        DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+        DieOutcomesB = DieOutcomesA
+    end,
     ChoiceA = ?INITIALDIECHOICE,
     ChoiceB = ?INITIALDIECHOICE,
 
@@ -177,7 +187,8 @@ handle_game(
       Gid, 
       PlayerAName, PlayerBName, 
       NewPlayerAScoreCard, NewPlayerBScoreCard,
-      PlayerANode, PlayerBNode
+      PlayerANode, PlayerBNode,
+      IsStandard
     )
   end.
 
@@ -203,12 +214,6 @@ handle_roll(
     TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
     [PlayerAScoreCard, PlayerBScoreCard];
-    % if
-    %   TotalScoreForA > TotalScoreForB ->
-    %    [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
-    %   true ->
-    %     [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
-    % end;
 
     true ->
       %Step 1: Calculate the dies that need to be send for each player
