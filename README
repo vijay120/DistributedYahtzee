@@ -15,6 +15,45 @@ referee API:
 
 Testing:
 
+
+	Testing Referee-Player interactions:
+
+		1) Run the following for a normal (no crashes by either player) match between two players: Gets expected behaviour
+			MachineA (hollyhock): bash test_yahtzee_manager.sh node_name
+			MachineB: bash test_yahtzee_player1.sh vijay1 enugent1 hunter1 node_name@hollyhock
+			MachineC: bash test_yahtzee_player1.sh vijay2 enugent2 hunter2 node_name@hollyhock
+			MachineD:
+						full_node_name=node_name@hollyhock <- change this to machineA's host name whenever
+						erl -noshell -run external_controller main $full_node_name request_tournament 2 5
+
+
+		Results in Referee:
+
+		(notice Game Done! at the end)
+			https://gist.github.com/vijay120/5b884488222c45981b1d
+
+
+		2) Do the following for one player crashing: Gets expected behaviour
+			MachineB: ctrl-c
+
+		Results in Referee:
+
+		(notice Player B winning!)
+			https://gist.github.com/vijay120/cbfeae01df15ff39068f
+
+
+		3) Do the following for both players crashing: Gets expected behaviour
+
+		Results in Referee:
+
+		(notice bye! in the end)
+			https://gist.github.com/vijay120/748c2fcf45cc7315ae72
+
+
+
+
+
+
 	bash test_yahtzee_manager.sh node_name
 	bash test_external_controller.sh node_name
 	bash test_yahtzee_player.sh  2  vijay1 enugent1 hunter1 node_name@$(hostname -s)
