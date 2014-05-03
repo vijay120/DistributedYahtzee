@@ -381,7 +381,8 @@ listen(TournamentStatuses, UserTables) ->
         end,
         
         ThisTournamentStatus = lists:keyfind(Tid, ?TID, TournamentStatuses),
-        NewTournamentStatus = setelement(?STATUS, ThisTournamentStatus, completed),
+        UpdatedTournamentStatus = setelement(?STATUS, ThisTournamentStatus, completed),
+        NewTournamentStatus = setelement(?WINNER, UpdatedTournamentStatus, Winner),
         NewTournamentStatuses = lists:keyreplace(Tid, ?TID, TournamentStatuses, NewTournamentStatus),
 
         listen(NewTournamentStatuses, NewUserTables);

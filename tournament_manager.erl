@@ -55,17 +55,17 @@ tournament_main(Params) ->
   OptionalData = [],
   Tid = self(),
   UserTickets = lists:map(fun(Player) -> element(?LOGIN_TICKET, Player) end, Players),
-  % TODO: For spawning with bye, keep same format as Player Tuple, but have name be bye.
-  % TODO: (Others can be whatever they want.)
 
-  % TODO: When spawing this, we need to make sure it has at least two players in the list.
-  spawn(referee, referee_main, [["referee", Players, Tid, GamesPerMatch]]),
+  printnameln("README"),
+  printnameln("Players are: ~p", [Players]),
+  printnameln("GamesPerMatch are: ~p", [GamesPerMatch]),
+
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
-  {_, ActiveUsernames} = wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
+  ActiveUsernames = wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
   % printnameln("ActiveUsernames are: ~p", [ActiveUsernames]),
-  % ActivePlayers = lists:map(fun(X) -> lists:keyfind(X, ?USERNAME, Players) end, ActiveUsernames),
-  % playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, ActivePlayers).
-  play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
+  ActivePlayers = lists:map(fun(ActiveUsername) -> lists:keyfind(ActiveUsername, ?USERNAME, Players) end, ActiveUsernames),
+  playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, ActivePlayers, []).
+  % play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
 
 %% ====================================================================
@@ -77,17 +77,81 @@ tournament_main(Params) ->
 % spots. Then spawn a ref for each pair. Wait for all replies (
 % equal to number of refs spawned). Recurse. When one player, 
 % we're done.
-% playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players) ->
-%   NumPlayers = length(Players),
-%   RoundSize = largerPowerOfTwo(NumPlayers, 1),
-%   ListWithByes = Players ++ []
+playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players, TournamentRecords) ->
+  NumPlayers = length(Players),
+  RoundSize = largerPowerOfTwo(NumPlayers, 1),
+
+  if
+    RoundSize == 1 -> % The only player left is the winner!
+      YahtzeeManagerPid ! {report_tournament_results, self(), {Tid, TournamentRecords, hd(Players)}};
+    true ->
+      % A bye has the same data format as a player, but with garbage except for a bye username.
+      ListWithByes = Players ++ lists:duplicate(RoundSize-NumPlayers, {0,0,bye,0,0,0,0,0,0,0}),
+      ShuffledList = shuffle(ListWithByes),
+      {ShuffledListHalf1, ShuffledListHalf2} = lists:split(length(ShuffledList) div 2, ShuffledList),
+      Matchups = lists:zip(ShuffledListHalf1, ShuffledListHalf2),
+      printnameln("The matchups are: ~p", [Matchups]),
+
+      % Spawn a referee for each matchup.
+      lists:map(fun(Matchup) -> spawn(referee, referee_main, [["referee", tuple_to_list(Matchup), Tid, GamesPerMatch]]) end, Matchups),
+
+      % wait for all replies
+      {RoundWinners, UpdatedRecords} = receiveResults(RoundSize div 2, [], TournamentRecords),
+
+      playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, RoundWinners, UpdatedRecords)
+  end.
+
+% Returns Winners once we get NumWinners many.
+% Merges all records from all results into one,
+% Which it also outputs.
+receiveResults(NumWinners, Winners, Records) ->
+  if % case of having all results for round
+    NumWinners == length(Winners) ->
+      {Winners, Records};
+    true -> % otherwise, listen for more!
+      receive
+        {report_match_results, Pid, {Tid, UserRecords, Winner}} ->
+          printnameln("Received match results"),
+          % update records
+          NewRecords = mergeRecords(UserRecords, Records),
+          NewWinners = [Winner | Winners],
+          receiveResults(NumWinners, NewWinners, NewRecords);
+        BadMessage ->
+          printnameln("Received bad message: ~p", [BadMessage])
+      end
+  end.
+
+% Merge the records from UserRecords into the more general Records.
+% For each user, either update the existing record or insert
+% the new one.
+mergeRecords([], Records) ->
+  Records;
+mergeRecords(UserRecords, Records) -> % TODO: When do I update TournamentsPlayed/TournamentWins?
+  UserRecord = hd(UserRecords),
+  Username = element(?USERNAME, UserRecord),
+  case lists:keyfind(Username, ?USERNAME, Records) of
+    false -> % User does not exist in records, add him.
+      mergeRecords(tl(UserRecords), [UserRecord | Records]);
+
+    {Pid, Node, Username, Password, LoginTicket, IsLogin, 
+     ExistingMatchWins, ExistingMatchLosses, TournamentsPlayed, TournamentWins} ->
+      {_,_,_,_,_,_,NewMatchWins, NewMatchLosses,_,_} = UserRecord,
+
+      NewRecord = {Pid, Node, Username, Password, LoginTicket, IsLogin,
+                   ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses, 
+                   TournamentsPlayed, TournamentWins},
+
+      NewRecords = lists:keyreplace(Username, ?USERNAME, Records, NewRecord), % replace record with updated stats
+      mergeRecords(tl(UserRecords), NewRecords)
+  end.
+
 
 
 % Calculate value that is closest power of two greater than or equal to Num.
-calcRoundSize(Num, TwoPowerMultiple) ->
+largerPowerOfTwo(Num, TwoPowerMultiple) ->
   if
     TwoPowerMultiple < Num ->
-      calcRoundSize(Num, 2*TwoPowerMultiple);
+      largerPowerOfTwo(Num, 2*TwoPowerMultiple);
     true ->
       TwoPowerMultiple
   end.
@@ -113,7 +177,8 @@ wait_for_all_players(ExternalControllerPid, [], Usernames, OptionalData) ->
     printnameln("Get responses from all users! Sending the tournament_started message to ~p " ++
       " with data = ~p",
       [PidForReply, {Tid, Usernames, OptionalData}]),
-    ExternalControllerPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}};
+    ExternalControllerPid ! {tournament_started, PidForReply, {Tid, Usernames, OptionalData}},
+    Usernames;
 wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, OptionalData) ->
   {NewWaitingUserTickets, NewUserNames} = 
     receive
@@ -152,7 +217,7 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
       {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
           printnameln("reject_tournament message received from ~p with " ++
               "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]),
-          {WaitingUserTickets -- [LoginTicket], (Usernames -- [Username]) ++ [bye]};
+          {WaitingUserTickets -- [LoginTicket], (Usernames -- [Username])};
       %% ==============================================================
       %%                             Else
       %% ==============================================================
@@ -190,8 +255,8 @@ play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, completed, Referee
 getName() ->
   ?GLOBALNAME ++ io_lib:format("~p", [self()]).
 
-% printnameln(ToPrint) ->
-%   println(io_lib:format("~s > ", [getName()]) ++ ToPrint).
+printnameln(ToPrint) ->
+  println(io_lib:format("~s > ", [getName()]) ++ ToPrint).
 
 printnameln(ToPrint, Options) ->
   println(io_lib:format("~s > ", [getName()]) ++ ToPrint, Options).

@@ -106,6 +106,9 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
       UserRecords = [UserRecordA, UserRecordB],
       TournamentId ! {report_match_results, self(), {TournamentId, UserRecords, PlayerBName}};
     ConsecutiveTies > ((GamesPerMatch div 2) + 1) -> % Reset match under standard rules
+      printnameln("****************************************"),
+      printnameln("Now playing under standard Yahtzee rules"),
+      printnameln("****************************************"),
       handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA, 
                        ScorecardB, PlayerANode, PlayerBNode, GamesPerMatch, 
                        0, 0, 0, true);

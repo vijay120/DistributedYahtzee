@@ -15,8 +15,8 @@ Testing scripts (run one in each tab):
 	# sanity check
 	bash test_external_controller.sh node_name
 	# spawn players
-	bash test_yahtzee_player1.sh    vijay1 enugent1 hunter1 node_name@$(hostname -s)
-	bash test_yahtzee_player1.sh    vijay2 enugent2 hunter2 node_name@$(hostname -s)
+	bash test_yahtzee_player.sh 2   vijay1 enugent1 hunter1 node_name@$(hostname -s)
+	bash test_yahtzee_player.sh 2   vijay2 enugent2 hunter2 node_name@$(hostname -s)
 	# request a tournament
 	bash test_external_controller.sh node_name
 	# log enugent1 out
