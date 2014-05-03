@@ -38,8 +38,7 @@
 -define(YAHTZEEINDEX, 12).
 -define(BONUSINDEX, 14).
 -define(NOWINS, 0).
--define(TIMEOUT, 2000).
-
+-define(TIMEOUT, 60000).
 -define(PID, 1).
 -define(NODE, 2).
 -define(USERNAME, 3).

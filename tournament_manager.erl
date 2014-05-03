@@ -9,6 +9,7 @@
 
 -import(yahtzee_manager, [println/1, println/2]).
 -import(referee, [referee_main/1]).
+-import(shuffle, [shuffle/1]).
 
 %% ====================================================================
 %%                             Public API
@@ -60,13 +61,36 @@ tournament_main(Params) ->
   % TODO: When spawing this, we need to make sure it has at least two players in the list.
   spawn(referee, referee_main, [["referee", Players, Tid, GamesPerMatch]]),
   ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players),
-  wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
+  {_, ActiveUsernames} = wait_for_all_players(ExternalControllerPid, UserTickets, Usernames, OptionalData),
+  % printnameln("ActiveUsernames are: ~p", [ActiveUsernames]),
+  % ActivePlayers = lists:map(fun(X) -> lists:keyfind(X, ?USERNAME, Players) end, ActiveUsernames),
+  % playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, ActivePlayers).
   play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData).
 
 
 %% ====================================================================
 %%                      TM <-> Players Functions
 %% ====================================================================
+
+% Get number of players; our bracket will be the closest power of 2
+% greater than this. Then pair up by twos, with byes for the extra
+% spots. Then spawn a ref for each pair. Wait for all replies (
+% equal to number of refs spawned). Recurse. When one player, 
+% we're done.
+% playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players) ->
+%   NumPlayers = length(Players),
+%   RoundSize = largerPowerOfTwo(NumPlayers, 1),
+%   ListWithByes = Players ++ []
+
+
+% Calculate value that is closest power of two greater than or equal to Num.
+calcRoundSize(Num, TwoPowerMultiple) ->
+  if
+    TwoPowerMultiple < Num ->
+      calcRoundSize(Num, 2*TwoPowerMultiple);
+    true ->
+      TwoPowerMultiple
+  end.
 
 
 ask_each_player_to_join_tournament(YahtzeeManagerPid, Tid, Players) ->
