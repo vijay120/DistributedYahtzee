@@ -204,7 +204,7 @@ handle_game(
     ChoiceA = ?INITIALDIECHOICE,
     ChoiceB = ?INITIALDIECHOICE,
 
-    [NewPlayerAScoreCard, NewPlayerBScoreCard] =
+    [NewPlayerAScoreCard, NewPlayerBScoreCard, IsBye] =
       handle_roll(
         Tid, 
         Gid, 
@@ -215,6 +215,8 @@ handle_game(
         PlayerANode, PlayerBNode, 
         ChoiceA, ChoiceB
       ),
+
+      
 
     handle_game(
       Round + 1,
@@ -375,7 +377,7 @@ handle_roll(
       		io:format("Player A timed out ~p~n"),
 
       		%send message to player B
-            {player, PlayerBNode} ! {	play_request, 
+            {player, PlayerBNode} ! {play_request, 
 						self(), 
 						PlayerBName, 
 						{make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
