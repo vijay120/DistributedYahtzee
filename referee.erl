@@ -90,8 +90,7 @@ findMyPlayersAndGameId(PlayerATuple, PlayerBTuple, TournamentId) ->
         GameId, 
         PlayerAName, PlayerBName, 
         ScorecardA, ScorecardB, 
-        PlayerANode, PlayerBNode,
-        ?NOWINS, ?NOWINS).
+        PlayerANode, PlayerBNode).
 
 %This function handles all the logic and enforcement of rukes
 score_logic(ScoreCardChoice, ScoreCardChoiceValue, DiceGiven) ->
@@ -115,35 +114,48 @@ handle_game(
   Gid, 
   PlayerAName, PlayerBName, 
   PlayerAScoreCard, PlayerBScoreCard, 
-  PlayerANode, PlayerBNode,
-  PlayerAWins, PlayerBWins
+  PlayerANode, PlayerBNode
 ) ->  
   printnameln("In handle game"),
 
   if Round > 13 -> 
-      printnameln("Game stats: PlayerAWins = ~p, PlayerBWins = ~p",
-        [PlayerAWins, PlayerBWins]),
+      TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
+      TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
+
+      printnameln("Game stats: PlayerAScore = ~p, PlayerBScore = ~p",
+        [TotalScoreForA, TotalScoreForB]),
       printnameln("Game is done!"),
-      {UserRecords, Winner} = case PlayerAWins > PlayerBWins of
-        true ->
+      % TODO: Calculate Total Player A and B scores
+
+      {UserRecords, Winner} = if 
+        TotalScoreForA > TotalScoreForB -> 
           UserRecordA = {PlayerAName, 1, 0},
           UserRecordB = {PlayerBName, 0, 1},
-          {[UserRecordA, UserRecordB], PlayerAName};
-        false ->
+          {[UserRecordA, UserRecordB], PlayerBName};
+        TotalScoreForA == TotalScoreForB -> % TODO: Two players tied! Replay entire game
+                                        % TODO: with tie counter incremented. If
+                                        % TODO: it reaches a certain point, replay
+                                        % TODO: the game under standard Yahtzee rules?
+          UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
+          UserRecordB = {PlayerBName, 0, 0},
+          {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
+        TotalScoreForA < TotalScoreForB ->
           UserRecordA = {PlayerAName, 0, 1},
           UserRecordB = {PlayerBName, 1, 0},
-          {[UserRecordA, UserRecordB], PlayerBName}
+          {[UserRecordA, UserRecordB], PlayerAName}
       end,
       Tid ! {report_game_results, self(), {UserRecords, Winner}};
   true -> 
     random:seed(now()),
     timer:sleep(100),
+    % TODO EOIN: Shouldn't these be the same list? (Except for when they match, in
+    %            case we do as it is doing?)
     DieOutcomesA = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
-    DieOutcomesB = generate_fixed_length_lists("random", ?NUMPOSSIBLEDIEOUTCOMES),
+    DieOutcomesB = DieOutcomesA,
     ChoiceA = ?INITIALDIECHOICE,
     ChoiceB = ?INITIALDIECHOICE,
 
-    [NewPlayerAScoreCard, NewPlayerBScoreCard, InPlayerAWin, InPlayerBWin] =
+    [NewPlayerAScoreCard, NewPlayerBScoreCard] =
       handle_roll(
         Tid, 
         Gid, 
@@ -154,8 +166,10 @@ handle_game(
         PlayerANode, PlayerBNode, 
         ChoiceA, ChoiceB
       ),
-    NewPlayerAWins = PlayerAWins + InPlayerAWin,
-    NewPlayerBWins = PlayerBWins + InPlayerBWin,
+    % NewPlayerAWins = PlayerAWins + InPlayerAWin, % TODO: This should be score, not wins.
+    % NewPlayerBWins = PlayerBWins + InPlayerBWin, % TODO: The only win is at end of game and match.
+    % NewPlayerAScore = PlayerAScore + InPlayerAScore,
+    % NewPlayerBScore = PlayerBScore + InPlayerBScore
 
     handle_game(
       Round + 1,
@@ -163,8 +177,7 @@ handle_game(
       Gid, 
       PlayerAName, PlayerBName, 
       NewPlayerAScoreCard, NewPlayerBScoreCard,
-      PlayerANode, PlayerBNode,
-      NewPlayerAWins, NewPlayerBWins
+      PlayerANode, PlayerBNode
     )
   end.
 
@@ -189,10 +202,13 @@ handle_roll(
     TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
     TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-    if TotalScoreForA > TotalScoreForB -> [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
-      true ->
-        [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
-    end;
+    [PlayerAScoreCard, PlayerBScoreCard];
+    % if
+    %   TotalScoreForA > TotalScoreForB ->
+    %    [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
+    %   true ->
+    %     [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
+    % end;
 
     true ->
       %Step 1: Calculate the dies that need to be send for each player
