@@ -38,7 +38,7 @@
 -define(YAHTZEEINDEX, 12).
 -define(BONUSINDEX, 14).
 -define(NOWINS, 0).
-
+-define(TIMEOUT, 2000).
 
 -define(PID, 1).
 -define(NODE, 2).
@@ -113,13 +113,13 @@ handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
 
     true ->
       Winner = handle_game(?FIRSTROUND, 
-        TournamentId, 
-        GameId, 
-        PlayerAName, PlayerBName, 
-        ScorecardA, ScorecardB, 
-        PlayerANode, PlayerBNode,
-        IsStandard, false
-      ),
+                            TournamentId, 
+                            GameId, 
+                            PlayerAName, PlayerBName, 
+                            ScorecardA, ScorecardB, 
+                            PlayerANode, PlayerBNode,
+                            IsStandard, false, false),
+
       if
         Winner == PlayerAName ->
           handle_match(TournamentId, GameId, PlayerAName, PlayerBName, ScorecardA,
@@ -163,9 +163,11 @@ handle_game(
   PlayerAName, PlayerBName, 
   PlayerAScoreCard, PlayerBScoreCard, 
   PlayerANode, PlayerBNode,
-  IsStandard, IsBye
+  IsStandard, IsBye, IsTimeOut
 ) ->  
   printnameln("In handle game"),
+
+  io:format("Is timeout is ~p~n", [IsTimeOut]),
 
   if 
     PlayerAName == bye -> % If first is bye, other wins.
@@ -175,9 +177,10 @@ handle_game(
       PlayerAName;
 
     IsBye == true ->
+      io:format("I am a bye!"),
       bye;
 
-    Round > 13 -> 
+    (IsTimeOut == true) or (Round > 13)  -> 
       TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
       TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
@@ -187,16 +190,19 @@ handle_game(
 
       if 
         TotalScoreForA > TotalScoreForB -> 
+          io:format("Player A wins!"),
           PlayerAName;
           % UserRecordA = {PlayerAName, 1, 0},
           % UserRecordB = {PlayerBName, 0, 1},
           % {[UserRecordA, UserRecordB], PlayerAName};
         TotalScoreForA == TotalScoreForB -> 
+          io:format("Both players tie"),
           tie;
           % UserRecordA = {PlayerAName, 0, 0}, % ties are discarded
           % UserRecordB = {PlayerBName, 0, 0},
           % {[UserRecordA, UserRecordB], tie}; % my proposed protocol for ties
         TotalScoreForA < TotalScoreForB ->
+          io:format("Player B wins"),
           PlayerBName
           % UserRecordA = {PlayerAName, 0, 1},
           % UserRecordB = {PlayerBName, 1, 0},
@@ -204,6 +210,7 @@ handle_game(
       end;
       % Tid ! {report_match_results, self(), {UserRecords, Winner}};
   true -> 
+    io:format("inside true block~n"),
     random:seed(now()),
     timer:sleep(100),
     if
@@ -217,7 +224,7 @@ handle_game(
     ChoiceA = ?INITIALDIECHOICE,
     ChoiceB = ?INITIALDIECHOICE,
 
-    [NewPlayerAScoreCard, NewPlayerBScoreCard, IsBye] =
+    [NewPlayerAScoreCard, NewPlayerBScoreCard, NewIsBye, NewIsTimeOut] =
       handle_roll(
         Tid, 
         Gid, 
@@ -229,6 +236,8 @@ handle_game(
         ChoiceA, ChoiceB
       ),
 
+      
+
     handle_game(
       Round + 1,
       Tid, 
@@ -236,7 +245,7 @@ handle_game(
       PlayerAName, PlayerBName, 
       NewPlayerAScoreCard, NewPlayerBScoreCard,
       PlayerANode, PlayerBNode,
-      IsStandard, IsBye
+      IsStandard, NewIsBye, NewIsTimeOut
     )
   end.
 
@@ -261,7 +270,14 @@ handle_roll(
     TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
     TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
 
-    [PlayerAScoreCard, PlayerBScoreCard, false];
+    [PlayerAScoreCard, PlayerBScoreCard, false, false];
+    % if
+    %   TotalScoreForA > TotalScoreForB ->
+    %    [PlayerAScoreCard, PlayerBScoreCard, 1, 0];
+    %   true ->
+    %     [PlayerAScoreCard, PlayerBScoreCard, 0, 1]
+    % end;
+
 
     true ->
       %Step 1: Calculate the dies that need to be send for each player
@@ -277,18 +293,20 @@ handle_roll(
       printnameln("Before message sent"),
       printnameln("Player a username is: ~p", [PlayerAName]),
       printnameln("Player b username is: ~p", [PlayerBName]),
+      
       {player, PlayerANode} !
         {play_request, self(), PlayerAName,
           {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
-      {player, PlayerBNode} !
-        {play_request, self(), PlayerBName,
-          {make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
       printnameln("After message sent"),
 
       %Recieve for player A only
       receive
         {play_action, _, PlayerAName, {_, _, _, _, DiceToKeepA, ScorecardAChoice}} -> 
           %Receive for player B only
+            {player, PlayerBNode} ! {	play_request, 
+            							self(), 
+            							PlayerBName, 
+            							{make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
           receive
             {play_action, _, PlayerBName, {_, _, _, _, DiceToKeepB, ScorecardBChoice}} -> 
 
@@ -329,8 +347,8 @@ handle_roll(
                   lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
 
                 NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
-                        [NewPlayerBScore] ++ 
-                        element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
+                                  [NewPlayerBScore] ++ 
+                                element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
 
                 printnameln("Player B's scorecard is: ~p", [NewScorecardB]),
                 printnameln("Player B's choice is: ~p", [ScorecardBChoice]),
@@ -363,80 +381,42 @@ handle_roll(
                 )
               end;
             InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
+           	after ?TIMEOUT -> 
+           		%Since A is still responding and B timedout, A should win!
+   		         ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+ 				       ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+ 				       %Add more to scorecard B since he/she won!
+ 				       IncrementPlayerAScoreBy = 1000,
+        		   NewScorecardA = element(1, lists:split(?BONUSINDEX-1, ScorecardA)) ++ 
+                				      [IncrementPlayerAScoreBy] ++ 
+                				      element(2, lists:split(?BONUSINDEX, ScorecardA)),
+                [NewScorecardA, ScorecardB, false, true]
           end;
-          {play_action, _, PlayerBName, {_, _, _, _, DiceToKeepB, ScorecardBChoice}} -> 
-            %Receive for player B only
-            receive
-              {play_action, _, PlayerAName, {_, _, _, _, DiceToKeepA, ScorecardAChoice}} -> 
-
-                %So do not care about any of the score update logic until roll 3
-                if Roll == 3 -> 
-                  ValueAtScoreCardRowForA = lists:nth(ScorecardAChoice, PlayerAScoreCard),
-                  ValueAtScoreCardRowForB = lists:nth(ScorecardBChoice, PlayerBScoreCard),
-                  %check if the slots are already taken
-
-                  if 
-                    ValueAtScoreCardRowForA =/= -1
-                        -> printnameln("A cheated");
-                    true  -> printnameln("A has a valid move")
-                  end,
-
-                  NewPlayerAScore = score_logic(ScorecardAChoice,
-                    lists:nth(ScorecardAChoice, PlayerAScoreCard), DieToA),
-
-                  %Mark A's score card
-                  NewScorecardA = element(1, lists:split(ScorecardAChoice-1, PlayerAScoreCard)) ++ 
-                          [NewPlayerAScore] ++ 
-                          element(2, lists:split(ScorecardAChoice, PlayerAScoreCard)),
-
-                  printnameln("Player A's scorecard is: ~p", [NewScorecardA]),
-                  printnameln("Player A's choice is: ~p", [ScorecardAChoice]),
-                  printnameln("Player A's die is: ~p", [DieToA]),
-                  printnameln("Player A scores: ~p", [NewPlayerAScore]),
-
-
-                  %check if the slots are already taken
-                  if ValueAtScoreCardRowForB =/= -1 
-                        -> printnameln("B cheated");
-                    true  -> printnameln("B has a valid move")
-                  end,
-
-                  NewPlayerBScore = score_logic(ScorecardBChoice,
-                    lists:nth(ScorecardBChoice, PlayerBScoreCard), DieToB),
-
-                  NewScorecardB = element(1, lists:split(ScorecardBChoice-1, PlayerBScoreCard)) ++ 
-                          [NewPlayerBScore] ++ 
-                          element(2, lists:split(ScorecardBChoice, PlayerBScoreCard)),
-
-                  printnameln("Player B's scorecard is: ~p", [NewScorecardB]),
-                  printnameln("Player B's choice is: ~p", [ScorecardBChoice]),
-                  printnameln("Player B's die is: ~p", [DieToB]),
-                  printnameln("Player B scores: ~p", [NewPlayerBScore]),
-
-                  TotalScoreForA = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerAScoreCard),
-                  TotalScoreForB = lists:foldl(fun(X, Accin) -> Accin+X end, 0, PlayerBScoreCard),
-
-                  handle_roll(  Tid, 
-                          Gid, 
-                          Roll+1, 
-                          PlayerAName, PlayerBName, 
-                          NewScorecardA, NewScorecardB, 
-                          DieOutcomesA, DieOutcomesB, 
-                          PlayerANode, PlayerBNode, 
-                          DiceToKeepA, DiceToKeepB);
-                true -> 
-                  handle_roll(  Tid, 
-                          Gid, 
-                          Roll+1, 
-                          PlayerAName, PlayerBName, 
-                          PlayerAScoreCard, PlayerBScoreCard, 
-                          DieOutcomesA, DieOutcomesB, 
-                          PlayerANode, PlayerBNode, 
-                          DiceToKeepA, DiceToKeepB)
-                end;
-              InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
-            end;
         InvalidMessage -> printnameln("Invalid message: ~p", [InvalidMessage])
+      after ?TIMEOUT -> 
+      		io:format("Player A timed out~n"),
+
+      		%send message to player B
+            {player, PlayerBNode} ! {play_request, 
+						self(), 
+						PlayerBName, 
+						{make_ref(), Tid, Gid, Roll, DieToB, ReplacedScoreCardB, ReplacedScoreCardA}},
+			receive
+            	{play_action, _, PlayerBName, {_, _, _, _, DiceToKeepB, ScorecardBChoice}} -> 
+            		%Since player B reacted, he/she automatically wins
+            		  	ScorecardA = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+ 	 					        ScorecardB = generate_fixed_length_lists("scorecard", ?SCORECARDROWS),
+ 	 					        %Add more to scorecard B since he/she won!
+ 	 					    IncrementPlayerBScoreBy = 1000,
+                		NewScorecardB = element(1, lists:split(?BONUSINDEX-1, ScorecardB)) ++ 
+                        				[IncrementPlayerBScoreBy] ++ 
+                        				element(2, lists:split(?BONUSINDEX, ScorecardB)),
+                        [ScorecardA, NewScorecardB, false, true];
+                _ -> io:format("Not sure what to do here...")
+                after ?TIMEOUT -> 
+                	io:format("Timed out waiting for reply from Player B~p~n", [now()]),
+ 	 				[ReplacedScoreCardA, ReplacedScoreCardB, true, false]
+            end
       end
     end.
 
@@ -496,7 +476,6 @@ generate_fixed_length_lists(Type, Count) ->
         generate_fixed_length_lists(Type, Count-1)
     end
   end.
-
 
 %% ====================================================================
 %%                       Pretty Print Functions

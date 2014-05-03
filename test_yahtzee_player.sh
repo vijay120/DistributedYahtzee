@@ -24,15 +24,4 @@ echo "system_full_name="$system_full_name
 echo "========================================================================="
 set -o verbose
 erl -noshell -run yahtzee_player$player_number main $nodename $username $password $system_full_name
-# case $player_number in
-#  1)
-#   erl -noshell -run yahtzee_player1 main $nodename $username $password $system_full_name
-#   ;;
-#  2)
-#   erl -noshell -run yahtzee_player2 main $nodename $username $password $system_full_name
-#   ;;
-#  *)
-#   echo "No specified player number."
-#   ;;
-# esac
 set +o verbose

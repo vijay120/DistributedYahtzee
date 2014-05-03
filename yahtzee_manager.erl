@@ -66,6 +66,7 @@ main(Params) ->
 
 
 listen(TournamentStatuses, UserTables) ->
+  printnameln("=========================================="),
   printnameln("TournamentStatuses = ~p", [TournamentStatuses]),
   printnameln("UserTables = ~p", [UserTables]),
   receive
@@ -87,37 +88,41 @@ listen(TournamentStatuses, UserTables) ->
         printnameln("request_tournament message received from ~p with " ++
             "num-players = ~p, games-per-match = ~p.",
             [ExternalControllerPid, NumPlayers, GamesPerMatch]),
-        LoggedInPlayerList = [X || X <- UserTables, element(?IS_LOGIN, X) == true],
-        printnameln("Logged-in players are ~p", [LoggedInPlayerList]),
-        % Cut down to only NumPlayers
-        Players = lists:sublist(shuffle(LoggedInPlayerList), NumPlayers),
-        printnameln("Out of those, because NumPlayers = ~p, we select ~p",
-          [NumPlayers, Players]),
-        _OptionalData = [],
-        
-        printnameln("Spawning a tournament_manager process..."),
-        Nodename = string:concat("TournamentManager",
-          integer_to_list(length(TournamentStatuses) + 1)),
-        printnameln("Nodename = ~p", [Nodename]),
+        case ((GamesPerMatch >= 0) and (GamesPerMatch rem 2 == 1)) of
+          true ->
+            LoggedInPlayerList = [X || X <- UserTables, element(?IS_LOGIN, X) == true],
+            printnameln("Logged-in players are ~p", [LoggedInPlayerList]),
+            % Cut down to only NumPlayers
+            Players = lists:sublist(shuffle(LoggedInPlayerList), NumPlayers),
+            printnameln("Out of those, because NumPlayers = ~p, we select ~p",
+              [NumPlayers, Players]),
+            _OptionalData = [],
+            
+            printnameln("Spawning a tournament_manager process..."),
+            Nodename = string:concat("TournamentManager",
+              integer_to_list(length(TournamentStatuses) + 1)),
+            printnameln("Nodename = ~p", [Nodename]),
 
-        Tid = spawn(tournament_manager, tournament_main,
-          [
-            [
-              ExternalControllerPid,
-              self(),
-              Nodename, 
-              NumPlayers,
-              GamesPerMatch
-            ]
-            ++
-            Players
-          ]
-        ),
-        printnameln("tournament process spawned! Its TID is ~p", [Tid]),
+            Tid = spawn(tournament_manager, tournament_main,
+              [
+                [
+                  ExternalControllerPid,
+                  self(),
+                  Nodename, 
+                  NumPlayers,
+                  GamesPerMatch
+                ]
+                ++
+                Players
+              ]
+            ),
+            printnameln("tournament process spawned! Its TID is ~p", [Tid]),
 
-        NewTournamentStatuses = TournamentStatuses ++ [{Tid, in_progress, undefined}], % if in_progress, ignore winner entry
-        listen(NewTournamentStatuses, UserTables);
-        
+            NewTournamentStatuses = TournamentStatuses ++ [{Tid, in_progress, undefined}], % if in_progress, ignore winner entry
+            listen(NewTournamentStatuses, UserTables);
+          false ->
+            printnameln("Reject a non positive odd number of GamesPerMatch.")
+        end;
     % tournament-info - data is a tournament ID 
     {tournament_info, Pid, {TournamentId}} ->
         printnameln("tournament_info message received from ~p with " ++
