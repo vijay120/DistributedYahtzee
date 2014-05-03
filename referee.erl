@@ -208,6 +208,7 @@ handle_roll(
       printnameln("Before message sent"),
       printnameln("Player a username is: ~p", [PlayerAName]),
       printnameln("Player b username is: ~p", [PlayerBName]),
+      
       {player, PlayerANode} !
         {play_request, self(), PlayerAName,
           {make_ref(), Tid, Gid, Roll, DieToA, ReplacedScoreCardA, ReplacedScoreCardB}},
@@ -427,7 +428,6 @@ generate_fixed_length_lists(Type, Count) ->
         generate_fixed_length_lists(Type, Count-1)
     end
   end.
-
 
 %% ====================================================================
 %%                       Pretty Print Functions
