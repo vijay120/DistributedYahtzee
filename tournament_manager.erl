@@ -21,6 +21,8 @@
 -define(TEMP, 1).
 -define(GLOBALNAME, "TournamentManager").
 
+-define(RECORD_USERNAME, 1).
+
 % For UserTable indexing...
 -define(PID, 1).
 -define(NODE, 2).
@@ -83,7 +85,9 @@ playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players, TournamentRecords
 
   if
     RoundSize == 1 -> % The only player left is the winner!
-      YahtzeeManagerPid ! {report_tournament_results, self(), {Tid, TournamentRecords, hd(Players)}};
+      WinnerPlayer = hd(Players),
+      WinnerUsername = element(?USERNAME, WinnerPlayer),
+      YahtzeeManagerPid ! {report_tournament_results, self(), {Tid, TournamentRecords, WinnerUsername}};
     true ->
       % A bye has the same data format as a player, but with garbage except for a bye username.
       ListWithByes = Players ++ lists:duplicate(RoundSize-NumPlayers, {0,0,bye,0,0,0,0,0,0,0}),
@@ -96,7 +100,7 @@ playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players, TournamentRecords
       lists:map(fun(Matchup) -> spawn(referee, referee_main, [["referee", tuple_to_list(Matchup), Tid, GamesPerMatch]]) end, Matchups),
 
       % wait for all replies
-      {RoundWinners, UpdatedRecords} = receiveResults(RoundSize div 2, [], TournamentRecords),
+      {RoundWinners, UpdatedRecords} = receiveResults(RoundSize div 2, [], TournamentRecords, Players),
 
       playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, RoundWinners, UpdatedRecords)
   end.
@@ -104,7 +108,7 @@ playTournament(YahtzeeManagerPid, Tid, GamesPerMatch, Players, TournamentRecords
 % Returns Winners once we get NumWinners many.
 % Merges all records from all results into one,
 % Which it also outputs.
-receiveResults(NumWinners, Winners, Records) ->
+receiveResults(NumWinners, Winners, Records, UserTables) ->
   if % case of having all results for round
     NumWinners == length(Winners) ->
       {Winners, Records};
@@ -114,8 +118,9 @@ receiveResults(NumWinners, Winners, Records) ->
           printnameln("Received match results"),
           % update records
           NewRecords = mergeRecords(UserRecords, Records),
-          NewWinners = [Winner | Winners],
-          receiveResults(NumWinners, NewWinners, NewRecords);
+          WinnerProfile = lists:keyfind(Winner, ?USERNAME, UserTables),
+          NewWinners = [WinnerProfile | Winners],
+          receiveResults(NumWinners, NewWinners, NewRecords, UserTables);
         BadMessage ->
           printnameln("Received bad message: ~p", [BadMessage])
       end
@@ -126,23 +131,33 @@ receiveResults(NumWinners, Winners, Records) ->
 % the new one.
 mergeRecords([], Records) ->
   Records;
-mergeRecords(UserRecords, Records) -> % TODO: When do I update TournamentsPlayed/TournamentWins?
+mergeRecords(UserRecords, Records) ->
   UserRecord = hd(UserRecords),
-  Username = element(?USERNAME, UserRecord),
-  case lists:keyfind(Username, ?USERNAME, Records) of
+  Username = element(1, UserRecord), % TODO: Fix magic number
+  case lists:keyfind(Username, 1, Records) of
     false -> % User does not exist in records, add him.
       mergeRecords(tl(UserRecords), [UserRecord | Records]);
 
-    {Pid, Node, Username, Password, LoginTicket, IsLogin, 
-     ExistingMatchWins, ExistingMatchLosses, TournamentsPlayed, TournamentWins} ->
-      {_,_,_,_,_,_,NewMatchWins, NewMatchLosses,_,_} = UserRecord,
+    {Username, ExistingMatchWins, ExistingMatchLosses} ->
+      {_, NewMatchWins, NewMatchLosses} = UserRecord,
+      NewRecord = {Username, ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses},
+      NewRecords = lists:keyreplace(Username, ?RECORD_USERNAME, Records, NewRecord), % replace record with updated stats
+      mergeRecords(tl(UserRecords), NewRecords);
 
-      NewRecord = {Pid, Node, Username, Password, LoginTicket, IsLogin,
-                   ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses, 
-                   TournamentsPlayed, TournamentWins},
+    % {Pid, Node, Username, Password, LoginTicket, IsLogin, 
+    %  ExistingMatchWins, ExistingMatchLosses, TournamentsPlayed, TournamentWins} ->
+    %   {_,_,_,_,_,_,NewMatchWins, NewMatchLosses,_,_} = UserRecord,
 
-      NewRecords = lists:keyreplace(Username, ?USERNAME, Records, NewRecord), % replace record with updated stats
-      mergeRecords(tl(UserRecords), NewRecords)
+    %   NewRecord = {Pid, Node, Username, Password, LoginTicket, IsLogin,
+    %                ExistingMatchWins+NewMatchWins, ExistingMatchLosses+NewMatchLosses, 
+    %                TournamentsPlayed, TournamentWins},
+
+      
+      
+    BadResult ->
+      printnameln("Just prior to bad tings"),
+      timer:sleep(500),
+      printnameln("BadResult is: ~p", [BadResult])
   end.
 
 
