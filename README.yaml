@@ -31,12 +31,12 @@ Testing notes:
 
 
 Tested:
-[ ] login/logout works
+[/] login/logout works
 	[/] login with the same username/password
 	[/] login with the a wrong password
-	[ ] crashing implies logout
+	[/] crashing implies logout
 	[/] logout update the user table
-[ ] statistics report
+[/] statistics report
 	[/] user_info with external controller
 	[/] update stats after each match
 
@@ -50,11 +50,9 @@ Known bugs:
 
 TODO:
 	[/] change tournament status at the end
-	- more-than-2-players system
+	[Eoin] more-than-2-players system
 	[/] a bye mechanism
-	[TUM] monitoring
-		- tournament_manager: design a bracket and keep track
-		- referee: extend statistics report to take the sum of match wins, etc
+	[/] monitoring
 	[/] standard yahtzee
 	[/] implement best-of-x
 		[/] ignore game-per-match k when k is not a positive odd number
