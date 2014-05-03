@@ -124,7 +124,7 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
       {reject_tournament, Pid, Username, {Tid, LoginTicket}} ->
           printnameln("reject_tournament message received from ~p with " ++
               "tid = ~p, login-ticket = ~p.", [Pid, Tid, LoginTicket]),
-          {WaitingUserTickets -- [LoginTicket], Usernames -- [Username]};
+          {WaitingUserTickets -- [LoginTicket], (Usernames -- [Username]) ++ [bye]};
       %% ==============================================================
       %%                             Else
       %% ==============================================================
@@ -141,8 +141,8 @@ wait_for_all_players(ExternalControllerPid, WaitingUserTickets, Usernames, Optio
 
 play(YahtzeeManagerPid, NumPlayers, GamesPerMatch, Usernames, in_progress, RefereeGids, OptionalData) ->
   receive
-      {report_game_results, Pid, {UserRecords, Winner}} ->
-        YahtzeeManagerPid ! {report_game_results, Pid, {UserRecords, Winner}};
+      {report_game_results, Pid, {Tid, UserRecords, Winner}} ->
+        YahtzeeManagerPid ! {report_tournament_results, Pid, {Tid, UserRecords, Winner}};
 
       BadMessage ->
         printnameln("Bad message: ~p", [BadMessage])

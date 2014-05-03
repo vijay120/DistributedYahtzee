@@ -232,7 +232,7 @@ listen(TournamentStatuses, UserTables) ->
             LoginTicket = make_ref(),
             NewUserTables = UserTables,
             printnameln("Password does not match!"),
-            exit(UserPid, {badmatch, "Incorrect password"}) % TODO: What do we do now??
+            exit(UserPid, badarg) % TODO: What do we do now??
         end,
 
         listen(TournamentStatuses, NewUserTables);
@@ -333,18 +333,17 @@ listen(TournamentStatuses, UserTables) ->
     % Some tournament ended and is giving us the results. 
     % UserRecords: [{Username, MatchWins, MatchLosses}] (every player in tournament)
     % Winner: Username (the winner of the tournament)
-    {report_game_results, Pid, {UserRecords, Winner}} ->
-        printnameln("results message received from ~p with " ++
+    {report_tournament_results, Pid, {Tid, UserRecords, Winner}} ->
+        printnameln("report_tournament_results message received from ~p with " ++
           " UserRecords = ~p, Winner = ~p",
           [Pid, UserRecords, Winner]
         ),
         % Update usertables with new stats from all players in tournament.
         UpdatedUserTables = updateUserTables(UserRecords, UserTables),
 
-        % update winner with tourney win separately
-        {WinnerPid, WinnerNodename, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin,
-          WinnerMatchWins, WinnerMatchLosses, WinnerTourneysPlayed,
-          WinnerTourneysWon} = lists:keyfind(Winner, ?USERNAME, UpdatedUserTables),
+        {WinnerPid, WinnerNodename, _, WinnerPassword, WinnerLoginTicket, WinnerIsLogin, WinnerMatchWins,
+          WinnerMatchLosses, WinnerTourneysPlayed, WinnerTourneysWon} = 
+          lists:keyfind(Winner, ?USERNAME, UpdatedUserTables), % update winner with tourney win separately
 
         NewWinnerRecord = {
           WinnerPid, WinnerNodename, Winner, WinnerPassword,
@@ -353,8 +352,12 @@ listen(TournamentStatuses, UserTables) ->
           WinnerTourneysWon + 1
         },
 
+        ThisTournamentStatus = lists:keyfind(Tid, ?TID, TournamentStatuses),
+        NewTournamentStatus = setelement(?STATUS, ThisTournamentStatus, completed),
+        NewTournamentStatuses = lists:keyreplace(Tid, ?TID, TournamentStatuses, NewTournamentStatus),
+
         NewUserTables = lists:keyreplace(Winner, ?USERNAME, UpdatedUserTables, NewWinnerRecord),
-        listen(TournamentStatuses, NewUserTables);
+        listen(NewTournamentStatuses, NewUserTables);
 
     %% ==============================================================
     %%                             Else
@@ -391,7 +394,6 @@ updateUserTables(UserRecords, UserTables) ->
         TourneysPlayed + 1,
         TourneysWon
       }, % update with new stats
-
       NewUserTables = lists:keyreplace(Username, ?USERNAME, UserTables, NewRecord),
       updateUserTables(tl(UserRecords), NewUserTables)
   end.

@@ -67,7 +67,7 @@ messages:
 	- tournament_manager -> referee
 		- referee_main(<tid>, UserTableOfTwo)
 	- referee -> referee OR tournament_manager -> yahtzee_manager
-		- report_game_results: {report_game_results, Pid, {[{Username, MatchWins, MatchLosses}], Winner}}
+		- report_game_results: {report_game_results, Pid, {Tid, [{Username, MatchWins, MatchLosses}], Winner}}
 
 
 	- yahtzee_manager -> player:

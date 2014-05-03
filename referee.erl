@@ -136,7 +136,7 @@ handle_game(
           UserRecordB = {PlayerBName, 1, 0},
           {[UserRecordA, UserRecordB], PlayerBName}
       end,
-      Tid ! {report_game_results, self(), {UserRecords, Winner}};
+      Tid ! {report_game_results, self(), {Tid, UserRecords, Winner}};
   true -> 
     random:seed(now()),
     timer:sleep(100),
